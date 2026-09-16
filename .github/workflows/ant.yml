@@ -93,5 +93,6 @@ jobs:
           ATTEMPT: ${{ steps.guard.outputs.attempt }}
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
+          [ -f "$EXEC" ] && jq '[.[]|select(.type=="result")]|last|del(.modelUsage)' "$EXEC" || echo "no execution file"
           extra=$(jq -n --arg c "$CONCLUSION" --argjson so "$SO" --arg i "$ISSUE" --arg a "$ATTEMPT" '{conclusion:$c, issue:($i|tonumber), attempt:($a|tonumber), result:$so}')
           bash .antfarm/log.sh worker "$MODEL" "$EXEC" "$extra"

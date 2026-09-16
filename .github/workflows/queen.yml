@@ -79,5 +79,6 @@ jobs:
           RUN: ${{ steps.guard.outputs.runs_today }}
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
+          [ -f "$EXEC" ] && jq '[.[]|select(.type=="result")]|last|del(.modelUsage)' "$EXEC" || echo "no execution file"
           extra=$(jq -n --arg c "$CONCLUSION" --argjson so "$SO" --arg r "$RUN" '{conclusion:$c, run_today:($r|tonumber)+1, result:$so}')
           bash .antfarm/log.sh queen "$MODEL" "$EXEC" "$extra"
