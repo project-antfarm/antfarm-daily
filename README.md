@@ -60,8 +60,10 @@ open PRs against them; those PRs cannot merge without the human.
 
 ## Limits (enforced by workflows)
 
-Queen cycles per day, concurrent `ready` Issues, attempts per Issue, turns per
-run, job timeout, lease per Issue. Values live in `.antfarm/config.yml`.
+Runs per day per role, weekly token budget across the colony, turns per run,
+job timeout, concurrent `ready` Issues, attempts per Issue, lease per Issue.
+All counters are computed from the Colony log ledger by `.antfarm/budget.sh`
+before any model starts. Values live in `.antfarm/config.yml`.
 Kill switch: repository variable `ANTFARM_ENABLED`.
 
 ## Telemetry
