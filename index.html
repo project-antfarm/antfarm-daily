@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A.N.T.F.A.R.M. Daily</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <main class="day">
+      <header class="day__header">
+        <p class="day__eyebrow">Today</p>
+        <h1 class="day__date" id="today-date"></h1>
+      </header>
+
+      <section class="tasks" aria-labelledby="tasks-heading">
+        <h2 id="tasks-heading" class="visually-hidden">Tasks</h2>
+
+        <form id="task-form" class="task-form">
+          <label for="task-input" class="visually-hidden">Add a task</label>
+          <input
+            id="task-input"
+            class="task-form__input"
+            type="text"
+            placeholder="Add a task…"
+            autocomplete="off"
+          />
+          <button type="submit" class="task-form__submit">Add</button>
+        </form>
+
+        <p id="empty-state" class="empty-state">No tasks yet. Add your first one above.</p>
+        <ul id="task-list" class="task-list"></ul>
+      </section>
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
