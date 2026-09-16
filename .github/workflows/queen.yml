@@ -39,7 +39,7 @@ jobs:
           skip() { echo "skip: $1"; echo "skip=true" >> "$GITHUB_OUTPUT"; echo "reason=$1" >> "$GITHUB_OUTPUT"; exit 0; }
           [ "$ENABLED" = "true" ] || skip "kill switch off"
           [ "$(gh issue list --label done --state all --json number --jq length)" = "0" ] || skip "DONE declared"
-          .antfarm/budget.sh queen "$RUNS_PER_DAY" "$WEEKLY" || skip "over budget"
+          bash .antfarm/budget.sh queen "$RUNS_PER_DAY" "$WEEKLY" || { rc=$?; [ "$rc" = 3 ] && skip "over budget"; exit "$rc"; }
           # lease: in-progress Issues without an open PR past the lease go back to ready
           for n in $(gh issue list --label in-progress --json number --jq '.[].number'); do
             [ "$(gh pr list --head "ant/issue-$n" --state open --json number --jq length)" = "0" ] || continue
@@ -80,4 +80,4 @@ jobs:
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
           extra=$(jq -n --arg c "$CONCLUSION" --argjson so "$SO" --arg r "$RUN" '{conclusion:$c, run_today:($r|tonumber)+1, result:$so}')
-          .antfarm/log.sh queen "$MODEL" "$EXEC" "$extra"
+          bash .antfarm/log.sh queen "$MODEL" "$EXEC" "$extra"

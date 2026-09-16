@@ -45,7 +45,7 @@ jobs:
           skip() { echo "skip: $1"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
           echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
           [ "$ENABLED" = "true" ] || skip "kill switch off"
-          .antfarm/budget.sh worker "$RUNS_PER_DAY" "$WEEKLY" || skip "over budget"
+          bash .antfarm/budget.sh worker "$RUNS_PER_DAY" "$WEEKLY" || { rc=$?; [ "$rc" = 3 ] && skip "over budget"; exit "$rc"; }
           labels=$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name]|join(" ")')
           case " $labels " in *" ready "*|*" needs-fix "*) ;; *) skip "issue not ready/needs-fix: $labels";; esac
           attempt=0
@@ -94,4 +94,4 @@ jobs:
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
           extra=$(jq -n --arg c "$CONCLUSION" --argjson so "$SO" --arg i "$ISSUE" --arg a "$ATTEMPT" '{conclusion:$c, issue:($i|tonumber), attempt:($a|tonumber), result:$so}')
-          .antfarm/log.sh worker "$MODEL" "$EXEC" "$extra"
+          bash .antfarm/log.sh worker "$MODEL" "$EXEC" "$extra"
