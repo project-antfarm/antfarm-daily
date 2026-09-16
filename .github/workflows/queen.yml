@@ -75,7 +75,7 @@ jobs:
             --allowedTools "Bash(gh:*),Read,Glob,Grep,WebFetch"
             --json-schema '{"type":"object","properties":{"actions":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["actions","summary"]}'
       - name: log
-        if: always() && steps.guard.outputs.skip != 'true'
+        if: always() && steps.guard.outcome == 'success' && steps.guard.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           MODEL: ${{ steps.cfg.outputs.queen_model }}

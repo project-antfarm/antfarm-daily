@@ -80,7 +80,7 @@ jobs:
             --allowedTools "Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Read,Edit,MultiEdit,Write,Glob,Grep"
             --json-schema '{"type":"object","properties":{"pr":{"type":"integer"},"summary":{"type":"string"}},"required":["summary"]}'
       - name: log
-        if: always() && steps.guard.outputs.skip != 'true'
+        if: always() && steps.guard.outcome == 'success' && steps.guard.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           MODEL: ${{ steps.cfg.outputs.worker_model }}
