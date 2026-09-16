@@ -1,0 +1,26 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: install
+        if: hashFiles('package.json') != ''
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: lint
+        if: hashFiles('package.json') != ''
+        run: npm run lint --if-present
+      - name: test
+        if: hashFiles('package.json') != ''
+        run: npm test
+      - name: no code yet
+        if: hashFiles('package.json') == ''
+        run: echo "no package.json; nothing to check"
