@@ -8,6 +8,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: conventional PR title
+        if: github.event_name == 'pull_request'
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "$TITLE" | grep -Eq '^(feat|fix|test|ci|docs|refactor|chore|style|perf)(\([a-z0-9._/-]+\))?!?: .+'             || { echo "PR title must follow Conventional Commits: $TITLE"; exit 1; }
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

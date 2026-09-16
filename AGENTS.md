@@ -17,8 +17,12 @@ workflow that started you.
 5. A PR whose CI is red is not done.
 6. Do not weaken, skip or delete tests, lint or CI to make something pass.
 7. Prefer the smallest change that satisfies the acceptance criteria.
-8. Commit messages: one sentence. Keep any co-author trailer your tool adds;
-   authorship is part of the experiment's telemetry.
+8. Commits and PR titles follow Conventional Commits
+   (`type(scope): summary`, types: feat, fix, test, ci, docs, refactor,
+   chore, style, perf). One sentence, no body needed. PRs are squash-merged,
+   so the PR title becomes the commit on main and CI validates it. Keep any
+   co-author trailer your tool adds; authorship is part of the experiment's
+   telemetry.
 
 ## Queen
 
