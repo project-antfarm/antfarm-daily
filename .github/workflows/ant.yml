@@ -1,0 +1,94 @@
+name: ant
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number
+        required: true
+concurrency:
+  group: worker
+  cancel-in-progress: false
+permissions: {}
+env:
+  COLONY_LOG_ISSUE: "1"
+  GH_REPO: ${{ github.repository }}
+jobs:
+  ant:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ready' || github.event.label.name == 'needs-fix'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: read config
+        id: cfg
+        run: |
+          for k in worker.model worker.max_turns attempts_max; do
+            echo "${k//./_}=$(yq ".$k" .antfarm/config.yml)" >> "$GITHUB_OUTPUT"
+          done
+      - uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ secrets.WORKER_APP_ID }}
+          private-key: ${{ secrets.WORKER_APP_PRIVATE_KEY }}
+      - name: guards and state transition
+        id: guard
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ENABLED: ${{ vars.ANTFARM_ENABLED }}
+          ISSUE: ${{ github.event.inputs.issue || github.event.issue.number }}
+          ATTEMPTS_MAX: ${{ steps.cfg.outputs.attempts_max }}
+        run: |
+          skip() { echo "skip: $1"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
+          [ "$ENABLED" = "true" ] || skip "kill switch off"
+          labels=$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name]|join(" ")')
+          case " $labels " in *" ready "*|*" needs-fix "*) ;; *) skip "issue not ready/needs-fix: $labels";; esac
+          attempt=0
+          for l in $labels; do case "$l" in attempt:*) attempt="${l#attempt:}";; esac; done
+          if [[ " $labels " == *" needs-fix "* ]]; then
+            if [ "$attempt" -ge "$ATTEMPTS_MAX" ]; then
+              gh issue edit "$ISSUE" --remove-label needs-fix --add-label blocked
+              gh issue comment "$ISSUE" --body "Blocked: $attempt fix attempts exhausted. The Queen must decompose or drop this."
+              skip "attempts exhausted"
+            fi
+            next=$((attempt+1))
+            gh issue edit "$ISSUE" --add-label "attempt:$next"
+            [ "$attempt" = 0 ] || gh issue edit "$ISSUE" --remove-label "attempt:$attempt"
+            echo "attempt=$next" >> "$GITHUB_OUTPUT"
+          else
+            echo "attempt=0" >> "$GITHUB_OUTPUT"
+          fi
+          gh issue edit "$ISSUE" --remove-label ready --remove-label needs-fix --add-label in-progress
+          id=$(gh api "users/antfarm-worker[bot]" --jq .id)
+          git config user.name "antfarm-worker[bot]"
+          git config user.email "${id}+antfarm-worker[bot]@users.noreply.github.com"
+      - uses: anthropics/claude-code-action@v1
+        if: steps.guard.outputs.skip != 'true'
+        id: claude
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app.outputs.token }}
+          allowed_bots: "antfarm-queen[bot],antfarm-queen"
+          prompt: |
+            Follow `.antfarm/worker.md` exactly. Repository: ${{ github.repository }}.
+            Your Issue: #${{ steps.guard.outputs.issue }}. Fix attempt: ${{ steps.guard.outputs.attempt }} of ${{ steps.cfg.outputs.attempts_max }}.
+          claude_args: |
+            --model ${{ steps.cfg.outputs.worker_model }}
+            --max-turns ${{ steps.cfg.outputs.worker_max_turns }}
+            --allowedTools "Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Read,Edit,MultiEdit,Write,Glob,Grep"
+            --json-schema '{"type":"object","properties":{"pr":{"type":"integer"},"summary":{"type":"string"}},"required":["summary"]}'
+      - name: log
+        if: always() && steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          MODEL: ${{ steps.cfg.outputs.worker_model }}
+          SO: ${{ steps.claude.outputs.structured_output || '{}' }}
+          CONCLUSION: ${{ steps.claude.outputs.conclusion || 'failure' }}
+          ISSUE: ${{ steps.guard.outputs.issue }}
+          ATTEMPT: ${{ steps.guard.outputs.attempt }}
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          extra=$(jq -n --arg c "$CONCLUSION" --argjson so "$SO" --arg i "$ISSUE" --arg a "$ATTEMPT" '{conclusion:$c, issue:($i|tonumber), attempt:($a|tonumber), result:$so}')
+          .antfarm/log.sh worker "$MODEL" "$EXEC" "$extra"

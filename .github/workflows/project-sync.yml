@@ -1,0 +1,52 @@
+name: project-sync
+on:
+  issues:
+    types: [labeled, unlabeled, closed, reopened]
+  pull_request:
+    types: [opened, reopened]
+permissions: {}
+env:
+  PROJECT_OWNER: ${{ github.repository_owner }}
+  PROJECT_NUMBER: "1"
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ secrets.QUEEN_APP_ID }}
+          private-key: ${{ secrets.QUEEN_APP_PRIVATE_KEY }}
+      - env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          n="$ISSUE"; status=""
+          if [ -z "$n" ]; then
+            n="${PR_BRANCH#ant/issue-}"
+            [ "$n" != "$PR_BRANCH" ] || exit 0
+            status="In review"
+          fi
+          data=$(gh issue view "$n" --json state,labels,url)
+          url=$(jq -r .url <<<"$data"); labels=$(jq -r '[.labels[].name]|join(" ")' <<<"$data")
+          case " $labels " in *" colony-log "*) exit 0;; esac
+          if [ -z "$status" ]; then
+            if [ "$(jq -r .state <<<"$data")" = "CLOSED" ]; then status="Done"
+            else case " $labels " in
+              *" blocked "*) status="Blocked";;
+              *" needs-fix "*) status="Needs fix";;
+              *" in-progress "*) status="In progress";;
+              *" ready "*) status="Ready";;
+              *) exit 0;;
+            esac; fi
+          fi
+          proj=$(gh project view "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --jq .id)
+          item=$(gh project item-add "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --url "$url" --format json --jq .id)
+          fields=$(gh project field-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json)
+          field=$(jq -r '.fields[]|select(.name=="Status")|.id' <<<"$fields")
+          opt=$(jq -r --arg s "$status" '.fields[]|select(.name=="Status")|.options[]|select(.name==$s)|.id' <<<"$fields")
+          gh project item-edit --project-id "$proj" --id "$item" --field-id "$field" --single-select-option-id "$opt"
+          echo "#$n -> $status"

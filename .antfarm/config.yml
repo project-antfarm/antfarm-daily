@@ -1,0 +1,11 @@
+# Colony limits. Read by workflows, never by prompts. Human-owned.
+queen:
+  model: claude-sonnet-5
+  max_turns: 40
+  cycles_per_day: 3
+worker:
+  model: claude-sonnet-5
+  max_turns: 80
+ready_max: 1
+attempts_max: 2
+lease_hours: 4
