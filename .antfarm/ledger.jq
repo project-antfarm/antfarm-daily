@@ -29,12 +29,16 @@ def cents: . * 100 | round / 100;
 # parameter also defines a function `role` that would shadow ours.
 # Daily limits count only the active run ($n), so a new run starts at zero.
 # The weekly budget below spans every run: it is real allowance consumption.
-def runs($r; $d; $n):
-  [ .[] | select(role == $r and .run == $n and (.ts | startswith($d)) and tokens > 0) ] | length;
+# The day is the human's local day: $o is the UTC offset in hours.
+def local_day($o): .ts | fromdateiso8601 + ($o * 3600) | strftime("%Y-%m-%d");
 
-def summary($today; $since; $b; $n):
+def runs($r; $d; $n; $o):
+  [ .[] | select(role == $r and .run == $n and local_day($o) == $d and tokens > 0) ] | length;
+
+def summary($today; $since; $b; $n; $o):
   {
-    today: { date: $today, run: $n, queen_runs: runs("queen"; $today; $n), worker_runs: runs("worker"; $today; $n) },
+    today: { date: $today, utc_offset_hours: $o, run: $n,
+             queen_runs: runs("queen"; $today; $n; $o), worker_runs: runs("worker"; $today; $n; $o) },
     week: {
       since: $since,
       tokens: ([ .[] | select(.ts >= $since) | tokens ] | add // 0),

@@ -68,16 +68,18 @@ if [ ! -f "$rundir/manifest.json" ]; then
 fi
 
 # Display-only projection, always recomputed from the event files.
-today=$(date -u +%F)
+# The colony's day follows the human's clock (see day_utc_offset_hours).
+offset=$(yq '.day_utc_offset_hours // 0' "$here/config.yml")
+today=$(date -u -d "$offset hours" +%F)
 # The budget week follows the subscription allowance, which resets on
 # Sunday 16:00 UTC (13:00 in Sao Paulo), not the calendar week.
 wk=$(date -u -d "sunday 16:00" +%s); [ "$wk" -le "$(date -u +%s)" ] || wk=$((wk - 604800))
 since=$(date -u -d "@$wk" +%FT%TZ)
 cat "$dir"/runs/"$SPECIMEN"/*/events/*.jsonl \
   | jq -s -L "$here" --arg t "$today" --arg s "$since" --arg run "$RUN" --arg sp "$SPECIMEN" --arg now "$now" \
-    --argjson b "$(yq -o=json '.budget' "$here/config.yml")" \
+    --argjson b "$(yq -o=json '.budget' "$here/config.yml")" --argjson o "$offset" \
     'include "ledger";
-     summary($t; $s; $b; $run) + {
+     summary($t; $s; $b; $run; $o) + {
        budget: { weekly_cost_usd: $b.weekly_cost_usd, weekly_tokens: $b.weekly_tokens },
        schema_version: 1, specimen: $sp, updated_at: $now, active_run: $run,
        run: ( [ .[] | select(.run == $run) ] | {
@@ -109,7 +111,7 @@ if [ -n "${GH_TOKEN:-}" ] && [ -n "${STATUS_ISSUE:-}" ]; then
     "| | |\n|---|---|\n" +
     "| Run | `\(.active_run)` |\n" +
     "| Executions in this run | \(.run.executions) (\(.run.failed) failed, \(.run.blocked) blocked by guards) |\n" +
-    "| Today (\(.today.date) UTC) | Queen \(.today.queen_runs), Worker \(.today.worker_runs) |\n" +
+    "| Today (\(.today.date), Sao Paulo day, UTC\(.today.utc_offset_hours)) | Queen \(.today.queen_runs), Worker \(.today.worker_runs) |\n" +
     "| Budget since \(.week.since) | US$ \(.week.cost_usd) of \(.budget.weekly_cost_usd) (conservative estimate, nothing is charged); \(.week.tokens) of \(.budget.weekly_tokens) raw tokens |\n" +
     "| Last event | `\(.last_event.type)` by \(.last_event.actor) at \(.last_event.ts) |\n\n" +
     "Telemetry: https://github.com/\($repo)"' "$dir/state/$SPECIMEN.json")
