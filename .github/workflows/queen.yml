@@ -1,5 +1,10 @@
 name: queen
 on:
+  # Primary trigger: a colony PR finished CI, so there is something to review.
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+  # Heartbeat, in case an event is missed.
   schedule:
     - cron: "0 9,15,21 * * *"
   workflow_dispatch:
@@ -15,6 +20,7 @@ env:
   SPECIMEN: ${{ github.event.repository.name }}
 jobs:
   queen:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && startsWith(github.event.workflow_run.head_branch, 'ant/'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -22,7 +28,7 @@ jobs:
       - name: read config
         id: cfg
         run: |
-          for k in run telemetry_repo queen.model queen.max_turns queen.runs_per_day weekly_token_budget ready_max attempts_max lease_hours; do
+          for k in run telemetry_repo queen.model queen.max_turns queen.runs_per_day queen.review_delay_seconds budget.weekly_cost_usd ready_max attempts_max lease_hours; do
             echo "${k//./_}=$(yq ".$k" .antfarm/config.yml)" >> "$GITHUB_OUTPUT"
           done
           echo "started_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
@@ -44,15 +50,13 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           ENABLED: ${{ vars.ANTFARM_ENABLED }}
           TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
-          RUNS_PER_DAY: ${{ steps.cfg.outputs.queen_runs_per_day }}
-          WEEKLY: ${{ steps.cfg.outputs.weekly_token_budget }}
           LEASE_HOURS: ${{ steps.cfg.outputs.lease_hours }}
         run: |
           # block <reason> [log]: skip the model; "log" also records a guard.blocked event
           block() { echo "blocked: $1"; { echo "skip=true"; echo "reason=$1"; echo "log=${2:-}"; } >> "$GITHUB_OUTPUT"; exit 0; }
           [ "$ENABLED" = "true" ] || block kill_switch
           [ "$(gh issue list --label done --state all --json number --jq length)" = "0" ] || block done
-          bash .antfarm/budget.sh queen "$RUNS_PER_DAY" "$WEEKLY" || { rc=$?; [ "$rc" = 3 ] || exit "$rc"; block "$(grep -oP 'block_reason=\K.*' "$GITHUB_OUTPUT" | tail -1)" log; }
+          bash .antfarm/budget.sh queen || { rc=$?; [ "$rc" = 3 ] || exit "$rc"; block "$(grep -oP 'block_reason=\K.*' "$GITHUB_OUTPUT" | tail -1)" log; }
           # lease: in-progress Issues without an open PR past the lease go back to ready
           for n in $(gh issue list --label in-progress --json number --jq '.[].number'); do
             [ "$(gh pr list --head "ant/issue-$n" --state open --json number --jq length)" = "0" ] || continue
@@ -63,6 +67,9 @@ jobs:
               gh issue comment "$n" --body "Lease expired after ${age}h without a PR. Back to ready."
             fi
           done
+      - name: give external reviewers time to post
+        if: steps.guard.outputs.skip != 'true' && github.event_name == 'workflow_run'
+        run: sleep "${{ steps.cfg.outputs.queen_review_delay_seconds }}"
       - name: record guard block
         if: steps.guard.outputs.log == 'log'
         env:
@@ -79,6 +86,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
+          # a run woken by the Worker's CI is attributed to the Worker's bot
+          allowed_bots: "antfarm-worker[bot],antfarm-worker"
           bot_id: "330098065"
           bot_name: "antfarm-queen[bot]"
           prompt: |
@@ -88,7 +97,7 @@ jobs:
             - ready_max: ${{ steps.cfg.outputs.ready_max }} (Issues labelled ready or in-progress at once)
             - attempts_max: ${{ steps.cfg.outputs.attempts_max }} fix attempts per Issue before it is blocked
             - Queen runs today: ${{ steps.guard.outputs.runs_today }} of ${{ steps.cfg.outputs.queen_runs_per_day }} before this one
-            - Tokens used by the colony this week: ${{ steps.guard.outputs.tokens_week }} of ${{ steps.cfg.outputs.weekly_token_budget }}
+            - Colony budget this week: ${{ steps.guard.outputs.cost_week }} of ${{ steps.cfg.outputs.budget_weekly_cost_usd }} (conservative US$ estimate; when it runs out every agent stops until Sunday 16:00 UTC)
           claude_args: |
             --model ${{ steps.cfg.outputs.queen_model }}
             --max-turns ${{ steps.cfg.outputs.queen_max_turns }}
