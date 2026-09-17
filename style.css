@@ -8,6 +8,7 @@
   --accent-ink: #ffffff;
   --done: #5c6552;
   --danger: #b23b2e;
+  --commitment: #2f5f8a;
   font-size: 16px;
 }
 
@@ -103,6 +104,11 @@ main {
   background: #fdf4ee;
 }
 
+.item.is-commitment {
+  border-left: 4px solid var(--commitment);
+  background: #eef4f9;
+}
+
 .item.is-done {
   border-style: dashed;
 }
@@ -129,6 +135,18 @@ main {
   flex-shrink: 0;
   width: 1.1rem;
   height: 1.1rem;
+}
+
+.commitment-badge {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--commitment);
+  border: 1px solid var(--commitment);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
 }
 
 .priority-badge {

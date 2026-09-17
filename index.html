@@ -41,6 +41,23 @@
             <button type="submit">Add</button>
           </form>
         </section>
+
+        <section class="panel commitments" aria-labelledby="commitments-heading">
+          <div class="panel-head">
+            <h2 id="commitments-heading">Commitments</h2>
+          </div>
+          <ul class="item-list" id="commitment-list"></ul>
+          <form id="commitment-form" class="add-form">
+            <label for="commitment-time" class="visually-hidden">Commitment time</label>
+            <input id="commitment-time" type="time" required />
+            <label for="commitment-input" class="visually-hidden">Add a commitment</label>
+            <input id="commitment-input" type="text" placeholder="Add a commitment…" autocomplete="off" required />
+            <button type="submit">Add</button>
+          </form>
+          <p class="form-note" id="commitment-required-note" hidden>
+            A commitment needs both a time and a description.
+          </p>
+        </section>
       </main>
     </div>
     <script type="module" src="app.js"></script>

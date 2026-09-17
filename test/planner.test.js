@@ -57,6 +57,7 @@ test('save/load round-trips state through storage', () => {
   const storage = memoryStorage();
   let state = add(emptyState(), 'priorities', 'ship the feature').state;
   state = add(state, 'tasks', 'reply to emails').state;
+  state = add(state, 'commitments', 'standup', '09:30').state;
   save(storage, state);
   assert.deepEqual(load(storage), state);
 });
@@ -64,4 +65,45 @@ test('save/load round-trips state through storage', () => {
 test('load returns an empty state when storage has nothing saved', () => {
   const storage = memoryStorage();
   assert.deepEqual(load(storage), emptyState());
+});
+
+test('add stores the time for a commitment', () => {
+  const { ok, state } = add(emptyState(), 'commitments', '  standup  ', '09:30');
+  assert.equal(ok, true);
+  assert.equal(state.commitments.length, 1);
+  assert.equal(state.commitments[0].text, 'standup');
+  assert.equal(state.commitments[0].time, '09:30');
+  assert.equal(state.commitments[0].done, false);
+});
+
+test('add rejects a commitment without a time', () => {
+  const result = add(emptyState(), 'commitments', 'standup', '');
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'time');
+  assert.equal(result.state.commitments.length, 0);
+});
+
+test('add rejects a commitment without text even if a time is given', () => {
+  const result = add(emptyState(), 'commitments', '   ', '09:30');
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'empty');
+});
+
+test('commitments are kept sorted by time regardless of add order', () => {
+  let state = add(emptyState(), 'commitments', 'dentist', '14:00').state;
+  state = add(state, 'commitments', 'standup', '09:30').state;
+  state = add(state, 'commitments', 'lunch', '12:00').state;
+  assert.deepEqual(
+    state.commitments.map((c) => c.text),
+    ['standup', 'lunch', 'dentist'],
+  );
+});
+
+test('commitments support the same complete/delete operations as other lists', () => {
+  let state = add(emptyState(), 'commitments', 'standup', '09:30').state;
+  const id = state.commitments[0].id;
+  state = toggleComplete(state, 'commitments', id);
+  assert.equal(state.commitments[0].done, true);
+  state = remove(state, 'commitments', id);
+  assert.equal(state.commitments.length, 0);
 });

@@ -23,3 +23,27 @@ Append-only architectural decision log, written by the colony.
   label changes to "Confirm delete?" for 4s, click again -> deletes), no
   modal/undo stack. Keyboard-operable for free since it's a native
   `<button>`. `# ponytail` note left in `app.js` on this simplification.
+
+## Issue #10: scheduled commitments
+
+- No schema version bump. `commitments` is a new top-level array alongside
+  `priorities`/`tasks`; `load()` already defaults any missing/non-array key
+  to `[]`, so old `v1` saves (no `commitments` key) load cleanly and new
+  saves stay readable by anything that only knows about `priorities`/`tasks`.
+  Storage key stays `antfarm-daily:v1`.
+- `Commitment = { id: string, text: string, done: boolean, time: string }`,
+  where `time` is the raw `"HH:MM"` value from a native
+  `<input type="time">` (24h, zero-padded), which sorts correctly with plain
+  string comparison — no date-parsing needed to keep the list ordered.
+- `add()` takes an optional 4th `time` argument, required (and validated)
+  only when `list === 'commitments'`; missing time returns
+  `{ ok: false, reason: 'time' }`, kept distinct from the existing
+  `reason: 'empty'` (blank text) so the UI can point at the right field.
+  Commitments are re-sorted by `time` inside `add()` itself, so the stored
+  state is always in display order and `app.js` never needs to sort at
+  render time.
+- Visual distinction from priorities/tasks reuses the existing
+  `.is-priority`-style pattern: a left accent border + tint (`.is-commitment`,
+  a different accent color) plus a badge, but the badge shows the actual
+  time (formatted 12h for display only, e.g. "9:30 AM") instead of a rank
+  label — same mechanism as `.priority-badge`, different content.

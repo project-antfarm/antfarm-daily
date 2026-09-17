@@ -13,10 +13,17 @@ const lists = {
     form: document.getElementById('task-form'),
     input: document.getElementById('task-input'),
   },
+  commitments: {
+    ul: document.getElementById('commitment-list'),
+    form: document.getElementById('commitment-form'),
+    input: document.getElementById('commitment-input'),
+    timeInput: document.getElementById('commitment-time'),
+  },
 };
 
 const priorityLimitNote = document.getElementById('priority-limit-note');
 const priorityCount = document.getElementById('priorities-count');
+const commitmentRequiredNote = document.getElementById('commitment-required-note');
 
 document.getElementById('today-date').textContent = new Date().toLocaleDateString(undefined, {
   weekday: 'long',
@@ -25,6 +32,20 @@ document.getElementById('today-date').textContent = new Date().toLocaleDateStrin
   day: 'numeric',
 });
 
+const EMPTY_MESSAGES = {
+  priorities: 'No priorities set yet.',
+  tasks: 'No tasks yet.',
+  commitments: 'No commitments yet.',
+};
+
+function formatTime(hhmm) {
+  const [hours, minutes] = hhmm.split(':').map(Number);
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function persist() {
   save(window.localStorage, state);
 }
@@ -32,6 +53,7 @@ function persist() {
 function render() {
   renderList('priorities');
   renderList('tasks');
+  renderList('commitments');
 
   const atLimit = state.priorities.length >= MAX_PRIORITIES;
   priorityLimitNote.hidden = !atLimit;
@@ -48,7 +70,7 @@ function renderList(listName) {
   if (items.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'empty-state';
-    empty.textContent = listName === 'priorities' ? 'No priorities set yet.' : 'No tasks yet.';
+    empty.textContent = EMPTY_MESSAGES[listName];
     ul.appendChild(empty);
     return;
   }
@@ -58,7 +80,12 @@ function renderList(listName) {
 
 function renderItem(listName, item, index) {
   const li = document.createElement('li');
-  li.className = ['item', listName === 'priorities' ? 'is-priority' : '', item.done ? 'is-done' : '']
+  li.className = [
+    'item',
+    listName === 'priorities' ? 'is-priority' : '',
+    listName === 'commitments' ? 'is-commitment' : '',
+    item.done ? 'is-done' : '',
+  ]
     .filter(Boolean)
     .join(' ');
 
@@ -69,6 +96,13 @@ function renderItem(listName, item, index) {
     const badge = document.createElement('span');
     badge.className = 'priority-badge';
     badge.textContent = `Priority ${index + 1}`;
+    label.appendChild(badge);
+  }
+
+  if (listName === 'commitments') {
+    const badge = document.createElement('span');
+    badge.className = 'commitment-badge';
+    badge.textContent = formatTime(item.time);
     label.appendChild(badge);
   }
 
@@ -123,16 +157,20 @@ function attachDeleteConfirm(button, listName, id) {
   });
 }
 
-Object.entries(lists).forEach(([listName, { form, input }]) => {
+Object.entries(lists).forEach(([listName, { form, input, timeInput }]) => {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    const result = add(state, listName, input.value);
+    const result = add(state, listName, input.value, timeInput?.value);
+    if (listName === 'commitments') {
+      commitmentRequiredNote.hidden = result.ok || result.reason !== 'time';
+    }
     if (!result.ok) {
-      input.focus();
+      (result.reason === 'time' ? timeInput : input).focus();
       return;
     }
     state = result.state;
     input.value = '';
+    if (timeInput) timeInput.value = '';
     persist();
     render();
     input.focus();
