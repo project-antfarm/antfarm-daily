@@ -13,3 +13,17 @@ given. Work only on that Issue.
    `Closes #<number>`, and a short description of what was done and how it was
    verified.
 6. Stop. Do not merge. Do not touch other Issues.
+
+## Your shell
+
+You run unattended in a disposable runner. The shell is open, except for
+`sudo`, `curl`, `wget`, `ssh`, `scp` and `nc`, which are denied automatically.
+A denied command costs a full turn of the colony's budget: never retry it or a
+variation of it. Use `node` when you need to fetch a local page or script a
+check.
+
+To look at the app in a browser: serve the folder in the background (for
+example `python3 -m http.server <port>`), drive it with Playwright through
+`npx`, then stop the server and remove whatever you created that does not
+belong in the PR. Screenshots saved under `screenshots/` by the test suite are
+published by CI, where the Queen and the human can see them.
