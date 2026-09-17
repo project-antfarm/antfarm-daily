@@ -117,7 +117,8 @@ jobs:
           claude_args: |
             --model ${{ steps.cfg.outputs.queen_model }}
             --max-turns ${{ steps.cfg.outputs.queen_max_turns }}
-            --allowedTools "Bash(gh:*),Read,Glob,Grep,WebFetch"
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+            --disallowedTools "Bash(sudo:*),Bash(curl:*),Bash(wget:*),Bash(ssh:*),Bash(scp:*),Bash(nc:*)"
             --json-schema '{"type":"object","properties":{"actions":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["actions","summary"]}'
       - name: keep raw trace
         if: always() && steps.claude.outputs.execution_file != ''
