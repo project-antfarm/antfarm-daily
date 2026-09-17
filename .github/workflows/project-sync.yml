@@ -32,7 +32,7 @@ jobs:
           fi
           data=$(gh issue view "$n" --json state,labels,url)
           url=$(jq -r .url <<<"$data"); labels=$(jq -r '[.labels[].name]|join(" ")' <<<"$data")
-          case " $labels " in *" colony-log "*) exit 0;; esac
+          case " $labels " in *" colony-status "*) exit 0;; esac
           if [ -z "$status" ]; then
             if [ "$(jq -r .state <<<"$data")" = "CLOSED" ]; then status="Done"
             else case " $labels " in
