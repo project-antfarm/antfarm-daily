@@ -6,21 +6,28 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: conventional PR title
         if: github.event_name == 'pull_request'
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: |
-          echo "$TITLE" | grep -Eq '^(feat|fix|test|ci|docs|refactor|chore|style|perf)(\([a-z0-9._/-]+\))?!?: .+'             || { echo "PR title must follow Conventional Commits: $TITLE"; exit 1; }
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+          echo "$TITLE" | grep -Eq '^(feat|fix|test|ci|docs|refactor|chore|style|perf)(\([a-z0-9._/-]+\))?!?: .+' \
+            || { echo "PR title must follow Conventional Commits: $TITLE"; exit 1; }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: install
         if: hashFiles('package.json') != ''
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: browsers for Playwright, when the project uses it
+        if: hashFiles('package.json') != ''
+        run: |
+          if grep -Eq '"(@playwright/test|playwright)"' package.json; then
+            npx playwright install --with-deps chromium
+          fi
       - name: lint
         if: hashFiles('package.json') != ''
         run: npm run lint --if-present
@@ -30,3 +37,14 @@ jobs:
       - name: no code yet
         if: hashFiles('package.json') == ''
         run: echo "no package.json; nothing to check"
+      - name: publish browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-evidence-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+            screenshots/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -8,38 +8,51 @@ concurrency:
   cancel-in-progress: false
 permissions: {}
 env:
-  COLONY_LOG_ISSUE: "1"
+  ROLE: queen
+  APP: antfarm-queen
+  STATUS_ISSUE: "1"
   GH_REPO: ${{ github.repository }}
+  SPECIMEN: ${{ github.event.repository.name }}
 jobs:
   queen:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: read config
         id: cfg
         run: |
-          for k in queen.model queen.max_turns queen.runs_per_day weekly_token_budget ready_max attempts_max lease_hours; do
+          for k in run telemetry_repo queen.model queen.max_turns queen.runs_per_day weekly_token_budget ready_max attempts_max lease_hours; do
             echo "${k//./_}=$(yq ".$k" .antfarm/config.yml)" >> "$GITHUB_OUTPUT"
           done
-      - uses: actions/create-github-app-token@v1
+          echo "started_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         id: app
         with:
           app-id: ${{ secrets.QUEEN_APP_ID }}
           private-key: ${{ secrets.QUEEN_APP_PRIVATE_KEY }}
-      - name: guards and context
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        id: tel
+        with:
+          app-id: ${{ secrets.TELEMETRY_APP_ID }}
+          private-key: ${{ secrets.TELEMETRY_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: antfarm-telemetry
+      - name: guards
         id: guard
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           ENABLED: ${{ vars.ANTFARM_ENABLED }}
+          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
           RUNS_PER_DAY: ${{ steps.cfg.outputs.queen_runs_per_day }}
           WEEKLY: ${{ steps.cfg.outputs.weekly_token_budget }}
           LEASE_HOURS: ${{ steps.cfg.outputs.lease_hours }}
         run: |
-          skip() { echo "skip: $1"; echo "skip=true" >> "$GITHUB_OUTPUT"; echo "reason=$1" >> "$GITHUB_OUTPUT"; exit 0; }
-          [ "$ENABLED" = "true" ] || skip "kill switch off"
-          [ "$(gh issue list --label done --state all --json number --jq length)" = "0" ] || skip "DONE declared"
-          bash .antfarm/budget.sh queen "$RUNS_PER_DAY" "$WEEKLY" || { rc=$?; [ "$rc" = 3 ] && skip "over budget"; exit "$rc"; }
+          # block <reason> [log]: skip the model; "log" also records a guard.blocked event
+          block() { echo "blocked: $1"; { echo "skip=true"; echo "reason=$1"; echo "log=${2:-}"; } >> "$GITHUB_OUTPUT"; exit 0; }
+          [ "$ENABLED" = "true" ] || block kill_switch
+          [ "$(gh issue list --label done --state all --json number --jq length)" = "0" ] || block done
+          bash .antfarm/budget.sh queen "$RUNS_PER_DAY" "$WEEKLY" || { rc=$?; [ "$rc" = 3 ] || exit "$rc"; block "$(grep -oP 'block_reason=\K.*' "$GITHUB_OUTPUT" | tail -1)" log; }
           # lease: in-progress Issues without an open PR past the lease go back to ready
           for n in $(gh issue list --label in-progress --json number --jq '.[].number'); do
             [ "$(gh pr list --head "ant/issue-$n" --state open --json number --jq length)" = "0" ] || continue
@@ -50,12 +63,24 @@ jobs:
               gh issue comment "$n" --body "Lease expired after ${age}h without a PR. Back to ready."
             fi
           done
-      - uses: anthropics/claude-code-action@v1
+      - name: record guard block
+        if: steps.guard.outputs.log == 'log'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TELEMETRY_TOKEN: ${{ steps.tel.outputs.token }}
+          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
+          RUN: ${{ steps.cfg.outputs.run }}
+          MODEL: ${{ steps.cfg.outputs.queen_model }}
+          REASON: ${{ steps.guard.outputs.reason }}
+        run: bash .antfarm/telemetry.sh blocked "$(jq -cn --arg r "$REASON" '{reason:$r}')"
+      - uses: anthropics/claude-code-action@3b8197d3d486006dd4af54613517f21ac6ac625e # v1, pinned
         if: steps.guard.outputs.skip != 'true'
         id: claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
+          bot_id: "330098065"
+          bot_name: "antfarm-queen[bot]"
           prompt: |
             Follow `.antfarm/queen.md` exactly. Repository: ${{ github.repository }}.
             Deployed site: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
@@ -69,16 +94,25 @@ jobs:
             --max-turns ${{ steps.cfg.outputs.queen_max_turns }}
             --allowedTools "Bash(gh:*),Read,Glob,Grep,WebFetch"
             --json-schema '{"type":"object","properties":{"actions":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["actions","summary"]}'
-      - name: log
+      - name: keep raw trace
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trace-queen-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 90
+      - name: record execution
         if: always() && steps.guard.outcome == 'success' && steps.guard.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          TELEMETRY_TOKEN: ${{ steps.tel.outputs.token }}
+          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
+          RUN: ${{ steps.cfg.outputs.run }}
           MODEL: ${{ steps.cfg.outputs.queen_model }}
-          SO: ${{ steps.claude.outputs.structured_output || '{}' }}
-          CONCLUSION: ${{ steps.claude.outputs.conclusion || 'failure' }}
-          RUN: ${{ steps.guard.outputs.runs_today }}
-          EXEC: ${{ steps.claude.outputs.execution_file }}
+          STARTED_AT: ${{ steps.cfg.outputs.started_at }}
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+          REPORT: ${{ steps.claude.outputs.structured_output || '{}' }}
+          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
         run: |
-          [ -f "$EXEC" ] && jq '[.[]|select(.type=="result")]|last|del(.modelUsage)' "$EXEC" || echo "no execution file"
-          extra=$(jq -n --arg c "$CONCLUSION" --argjson so "$SO" --arg r "$RUN" '{conclusion:$c, run_today:(($r|tonumber)+1), result:$so}')
-          bash .antfarm/log.sh queen "$MODEL" "$EXEC" "$extra"
+          kind=failed; [ "$CONCLUSION" = success ] && kind=completed
+          bash .antfarm/telemetry.sh "$kind" "$(jq -cn --argjson r "$REPORT" '{agent_report:$r}')"

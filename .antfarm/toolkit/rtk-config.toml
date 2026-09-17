@@ -1,0 +1,15 @@
+# rtk configuration for colony agents. Human-owned.
+# Reading code and specifications must never be truncated.
+
+[hooks]
+exclude_commands = [
+  "gh pr diff",
+  "gh pr view",
+  "gh issue view",
+  "gh api",
+  "git diff",
+  "git show",
+]
+
+[telemetry]
+enabled = false

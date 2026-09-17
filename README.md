@@ -55,22 +55,37 @@ something else. Counted as "human decisions required".
 
 ## Boundary files (human-owned, see CODEOWNERS)
 
-`GOAL.md`, `AGENTS.md`, `CLAUDE.md`, `.github/**`, `.antfarm/**`. Agents may
-open PRs against them; those PRs cannot merge without the human.
+`GOAL.md`, `AGENTS.md`, `CLAUDE.md`, `.github/**`, `.antfarm/**`,
+`.claude/**`. Agents may open PRs against them; those PRs cannot merge without
+the human.
 
-## Limits (enforced by workflows)
+## Policy, state, telemetry
 
-Runs per day per role, weekly token budget across the colony, turns per run,
-job timeout, concurrent `ready` Issues, attempts per Issue, lease per Issue.
-All counters are computed from the Colony log ledger by `.antfarm/budget.sh`
-before any model starts. Values live in `.antfarm/config.yml`.
-Kill switch: repository variable `ANTFARM_ENABLED`.
+- **Policy** says how much is allowed: `.antfarm/config.yml`.
+- **Telemetry** says what happened: one immutable event file per execution in
+  [`antfarm-telemetry`](https://github.com/project-antfarm/antfarm-telemetry),
+  written by workflow steps through a dedicated App. Agents hold no credential
+  for that repository. Raw traces are kept as workflow artifacts for 90 days.
+- **State** is never stored for decisions. Before any model starts,
+  `.antfarm/budget.sh` recomputes the counters from the event files and the
+  guard allows or blocks the run. Blocks are recorded as `guard.blocked`.
 
-## Telemetry
+Limits: runs per day per role, weekly token budget across the colony, turns
+per run, job timeout, concurrent `ready` Issues, attempts per Issue, lease per
+Issue. Kill switch: repository variable `ANTFARM_ENABLED`.
 
-Every agent run appends a JSON comment to the pinned **Colony log** Issue:
-role, model, run id, cycle, actions, turns, tokens, duration. Everything else
-comes from GitHub history. Runs are summarised by the human in `RUNS.md`.
+Issue #1 shows the current status for humans and is rewritten in place. What
+GitHub already records (Issues, PRs, reviews, CI, merges) is not duplicated in
+telemetry; both sources join by Issue, PR, SHA and workflow run id.
+
+## Toolkit
+
+`.antfarm/toolkit.yml` lists every tool and skill available to the colony,
+with layer (global or specimen), kind (efficiency, behavioral or tool), source
+and pinned version. It is copied into the run manifest, because a toolkit
+change is an experimental variable. Actions are pinned by commit SHA.
+
+Runs are summarised by the human in `RUNS.md`.
 
 ## Reuse
 

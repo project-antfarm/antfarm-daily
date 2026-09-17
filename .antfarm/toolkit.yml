@@ -1,0 +1,57 @@
+# Toolkit available to the colony in this run. Human-owned.
+# Part of the experimental configuration: copied into the run manifest.
+# layer: global (any Antfarm specimen) | specimen (this repository)
+# kind:  efficiency (changes what the agent sees or spends)
+#        behavioral (changes how the agent designs or writes)
+#        tool (a capability the agent may choose to use)
+tools:
+  - name: rtk
+    layer: global
+    kind: efficiency
+    roles: [worker]
+    source: https://github.com/rtk-ai/rtk
+    version: v0.49.0
+    sha256: 7278231dfd7e6a730a4ab7f847b195bcf02289c2d57622b0dab75a6411100c8f
+    install: release binary, verified in the workflow; hook rewrites Bash commands
+    config: .antfarm/toolkit/rtk-config.toml
+    notes: >
+      Worker only. The Queen reviews from `gh` output, and on 2026-09-17 rtk
+      was verified to truncate 110 of 492 added lines in `gh pr diff`. For the
+      Worker, commands used to read code and specifications are excluded from
+      rewriting.
+
+  - name: ponytail
+    layer: global
+    kind: behavioral
+    roles: [queen, worker]
+    source: https://github.com/DietrichGebert/ponytail
+    version: 4.10.0
+    commit: e3ba2aa6f1e6f0bc4d69eb09c9f0d0a93af56156
+    license: MIT
+    install: >
+      .antfarm/toolkit/ponytail.md is the exact text the plugin's SessionStart
+      hook injects at level "full", generated from the pinned commit with the
+      plugin's own builder. Loaded for every agent through CLAUDE.md.
+
+  - name: minimalist-ui
+    layer: specimen
+    kind: behavioral
+    roles: [worker]
+    source: https://github.com/Leonxlnx/taste-skill
+    path: skills/minimalist-skill/SKILL.md
+    commit: e79ca9ec7e071eb3a3b623c4fb752e853fc3ed58
+    license: MIT
+    install: copied unmodified to .claude/skills/minimalist-ui/SKILL.md
+
+  - name: playwright
+    layer: specimen
+    kind: tool
+    roles: [worker, ci]
+    source: https://github.com/microsoft/playwright
+    install: >
+      Not preinstalled. If the colony adds it as a devDependency, ci.yml
+      installs Chromium and uploads test-results/, playwright-report/ and
+      screenshots/ as artifacts.
+
+runtime:
+  claude-code-action: 3b8197d3d486006dd4af54613517f21ac6ac625e # v1 on 2026-09-17; also fixes the Claude Code version

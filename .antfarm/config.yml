@@ -1,16 +1,18 @@
 # Colony limits. Read by workflows, never by prompts. Human-owned.
-# All counters come from the Colony log ledger (Issue #1), so they measure
-# runs where a model actually executed, not workflow triggers.
+# All counters are recomputed from the telemetry event files before any model
+# starts, and only executions that consumed tokens count.
+run: run-001
+telemetry_repo: project-antfarm/antfarm-telemetry
 queen:
-  model: claude-opus-5
+  model: claude-sonnet-5
   max_turns: 30
   runs_per_day: 3
 worker:
   model: claude-sonnet-5
   max_turns: 60
   runs_per_day: 3
-# Sum of all token kinds logged this week (Mon-Sun UTC). Hard stop for every
-# role. Calibrate against Claude /usage after the first week.
+# Sum of all token kinds logged this week (Mon-Sun UTC) across every run of
+# this specimen. Hard stop for every role. Calibrate against Claude /usage.
 weekly_token_budget: 5000000
 ready_max: 1
 attempts_max: 2

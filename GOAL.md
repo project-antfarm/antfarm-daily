@@ -166,13 +166,17 @@ Do not introduce:
 - remote databases;
 - authentication;
 - paid runtime services;
-- runtime dependencies of any kind (the deployed application must consist only
-  of its own HTML, CSS and JavaScript).
+- JavaScript libraries or frameworks at runtime.
 
-Development-time tooling (test runners, linters, build checks) may be used
-freely, as long as the deployed application remains dependency-free.
+Presentation assets that serve the visual design, such as web fonts, icon sets
+and images, are allowed. Keep them few, and prefer copies served from this
+repository over third-party hosts when that is practical.
 
-The application must remain fully functional without external services.
+Development-time tooling (test runners, linters, build checks, CSS tooling)
+may be used freely.
+
+The application must remain fully functional without external services: if a
+third-party font or icon host is unreachable, every feature must still work.
 
 ---
 

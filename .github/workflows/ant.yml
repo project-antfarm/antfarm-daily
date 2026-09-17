@@ -12,87 +12,138 @@ concurrency:
   cancel-in-progress: false
 permissions: {}
 env:
-  COLONY_LOG_ISSUE: "1"
+  ROLE: worker
+  APP: antfarm-worker
+  STATUS_ISSUE: "1"
   GH_REPO: ${{ github.repository }}
+  SPECIMEN: ${{ github.event.repository.name }}
+  RTK_TELEMETRY_DISABLED: "1"
 jobs:
   ant:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ready' || github.event.label.name == 'needs-fix'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: read config
         id: cfg
         run: |
-          for k in worker.model worker.max_turns worker.runs_per_day weekly_token_budget attempts_max; do
+          for k in run telemetry_repo worker.model worker.max_turns worker.runs_per_day weekly_token_budget attempts_max; do
             echo "${k//./_}=$(yq ".$k" .antfarm/config.yml)" >> "$GITHUB_OUTPUT"
           done
-      - uses: actions/create-github-app-token@v1
+          echo "started_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
+          echo "rtk_version=$(yq '.tools[] | select(.name=="rtk") | .version' .antfarm/toolkit.yml)" >> "$GITHUB_OUTPUT"
+          echo "rtk_sha256=$(yq '.tools[] | select(.name=="rtk") | .sha256' .antfarm/toolkit.yml)" >> "$GITHUB_OUTPUT"
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         id: app
         with:
           app-id: ${{ secrets.WORKER_APP_ID }}
           private-key: ${{ secrets.WORKER_APP_PRIVATE_KEY }}
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        id: tel
+        with:
+          app-id: ${{ secrets.TELEMETRY_APP_ID }}
+          private-key: ${{ secrets.TELEMETRY_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: antfarm-telemetry
       - name: guards and state transition
         id: guard
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           ENABLED: ${{ vars.ANTFARM_ENABLED }}
           ISSUE: ${{ github.event.inputs.issue || github.event.issue.number }}
+          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
           ATTEMPTS_MAX: ${{ steps.cfg.outputs.attempts_max }}
           RUNS_PER_DAY: ${{ steps.cfg.outputs.worker_runs_per_day }}
           WEEKLY: ${{ steps.cfg.outputs.weekly_token_budget }}
         run: |
-          skip() { echo "skip: $1"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          # block <reason> [log]: skip the model; "log" also records a guard.blocked event
+          block() { echo "blocked: $1"; { echo "skip=true"; echo "reason=$1"; echo "log=${2:-}"; } >> "$GITHUB_OUTPUT"; exit 0; }
           echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
-          [ "$ENABLED" = "true" ] || skip "kill switch off"
-          bash .antfarm/budget.sh worker "$RUNS_PER_DAY" "$WEEKLY" || { rc=$?; [ "$rc" = 3 ] && skip "over budget"; exit "$rc"; }
+          [ "$ENABLED" = "true" ] || block kill_switch
           labels=$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name]|join(" ")')
-          case " $labels " in *" ready "*|*" needs-fix "*) ;; *) skip "issue not ready/needs-fix: $labels";; esac
+          case " $labels " in *" ready "*|*" needs-fix "*) ;; *) block not_ready;; esac
+          bash .antfarm/budget.sh worker "$RUNS_PER_DAY" "$WEEKLY" || { rc=$?; [ "$rc" = 3 ] || exit "$rc"; block "$(grep -oP 'block_reason=\K.*' "$GITHUB_OUTPUT" | tail -1)" log; }
           attempt=0
           for l in $labels; do case "$l" in attempt:*) attempt="${l#attempt:}";; esac; done
           if [[ " $labels " == *" needs-fix "* ]]; then
             if [ "$attempt" -ge "$ATTEMPTS_MAX" ]; then
               gh issue edit "$ISSUE" --remove-label needs-fix --add-label blocked
               gh issue comment "$ISSUE" --body "Blocked: $attempt fix attempts exhausted. The Queen must decompose or drop this."
-              skip "attempts exhausted"
+              echo "attempt=$attempt" >> "$GITHUB_OUTPUT"
+              block attempts_exhausted log
             fi
             next=$((attempt+1))
             gh issue edit "$ISSUE" --add-label "attempt:$next"
             [ "$attempt" = 0 ] || gh issue edit "$ISSUE" --remove-label "attempt:$attempt"
-            echo "attempt=$next" >> "$GITHUB_OUTPUT"
-          else
-            echo "attempt=0" >> "$GITHUB_OUTPUT"
+            attempt=$next
           fi
+          echo "attempt=$attempt" >> "$GITHUB_OUTPUT"
           gh issue edit "$ISSUE" --remove-label ready --remove-label needs-fix --add-label in-progress
-          id=$(gh api "users/antfarm-worker[bot]" --jq .id)
-          git config user.name "antfarm-worker[bot]"
-          git config user.email "${id}+antfarm-worker[bot]@users.noreply.github.com"
-      - uses: anthropics/claude-code-action@v1
+      - name: record guard block
+        if: steps.guard.outputs.log == 'log'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TELEMETRY_TOKEN: ${{ steps.tel.outputs.token }}
+          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
+          RUN: ${{ steps.cfg.outputs.run }}
+          MODEL: ${{ steps.cfg.outputs.worker_model }}
+          REASON: ${{ steps.guard.outputs.reason }}
+          ISSUE: ${{ steps.guard.outputs.issue }}
+        run: bash .antfarm/telemetry.sh blocked "$(jq -cn --arg r "$REASON" --arg i "$ISSUE" '{reason:$r, target:{issue:($i|tonumber)}}')"
+      - name: install rtk (pinned, checksum verified)
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          RTK_VERSION: ${{ steps.cfg.outputs.rtk_version }}
+          RTK_SHA256: ${{ steps.cfg.outputs.rtk_sha256 }}
+        run: |
+          curl -fsSL -o /tmp/rtk.tgz "https://github.com/rtk-ai/rtk/releases/download/${RTK_VERSION}/rtk-x86_64-unknown-linux-musl.tar.gz"
+          echo "${RTK_SHA256}  /tmp/rtk.tgz" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin" "$HOME/.config/rtk"
+          tar -xzf /tmp/rtk.tgz -C /tmp && install -m 755 "$(find /tmp -maxdepth 2 -type f -name rtk | head -1)" "$HOME/.local/bin/rtk"
+          cp .antfarm/toolkit/rtk-config.toml "$HOME/.config/rtk/config.toml"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/rtk" --version
+          "$HOME/.local/bin/rtk" init -g --hook-only --auto-patch
+          "$HOME/.local/bin/rtk" rewrite "gh pr diff 1" && { echo "rtk config not applied: gh pr diff must not be rewritten"; exit 1; } || true
+      - uses: anthropics/claude-code-action@3b8197d3d486006dd4af54613517f21ac6ac625e # v1, pinned
         if: steps.guard.outputs.skip != 'true'
         id: claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
           allowed_bots: "antfarm-queen[bot],antfarm-queen"
+          bot_id: "330103854"
+          bot_name: "antfarm-worker[bot]"
           prompt: |
             Follow `.antfarm/worker.md` exactly. Repository: ${{ github.repository }}.
             Your Issue: #${{ steps.guard.outputs.issue }}. Fix attempt: ${{ steps.guard.outputs.attempt }} of ${{ steps.cfg.outputs.attempts_max }}.
           claude_args: |
             --model ${{ steps.cfg.outputs.worker_model }}
             --max-turns ${{ steps.cfg.outputs.worker_max_turns }}
-            --allowedTools "Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Read,Edit,MultiEdit,Write,Glob,Grep"
+            --allowedTools "Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(rtk git:*),Bash(rtk gh:*),Bash(rtk npm:*),Bash(rtk npx:*),Bash(rtk node:*),Read,Edit,MultiEdit,Write,Glob,Grep,Skill"
             --json-schema '{"type":"object","properties":{"pr":{"type":"integer"},"summary":{"type":"string"}},"required":["summary"]}'
-      - name: log
+      - name: keep raw trace
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trace-worker-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 90
+      - name: record execution
         if: always() && steps.guard.outcome == 'success' && steps.guard.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          TELEMETRY_TOKEN: ${{ steps.tel.outputs.token }}
+          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
+          RUN: ${{ steps.cfg.outputs.run }}
           MODEL: ${{ steps.cfg.outputs.worker_model }}
-          SO: ${{ steps.claude.outputs.structured_output || '{}' }}
-          CONCLUSION: ${{ steps.claude.outputs.conclusion || 'failure' }}
+          STARTED_AT: ${{ steps.cfg.outputs.started_at }}
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+          REPORT: ${{ steps.claude.outputs.structured_output || '{}' }}
+          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
           ISSUE: ${{ steps.guard.outputs.issue }}
           ATTEMPT: ${{ steps.guard.outputs.attempt }}
-          EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
-          [ -f "$EXEC" ] && jq '[.[]|select(.type=="result")]|last|del(.modelUsage)' "$EXEC" || echo "no execution file"
-          extra=$(jq -n --arg c "$CONCLUSION" --argjson so "$SO" --arg i "$ISSUE" --arg a "$ATTEMPT" '{conclusion:$c, issue:($i|tonumber), attempt:($a|tonumber), result:$so}')
-          bash .antfarm/log.sh worker "$MODEL" "$EXEC" "$extra"
+          kind=failed; [ "$CONCLUSION" = success ] && kind=completed
+          bash .antfarm/telemetry.sh "$kind" "$(jq -cn --argjson r "$REPORT" --arg i "$ISSUE" --arg a "$ATTEMPT" '{target:{issue:($i|tonumber), attempt:($a|tonumber)}, agent_report:$r}')"
