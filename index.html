@@ -9,8 +9,16 @@
 <body>
 <div class="page">
   <header class="day-header">
-    <p class="eyebrow">Today</p>
+    <div class="day-header-top">
+      <p class="eyebrow" id="day-eyebrow">Today</p>
+      <div class="day-nav">
+        <button type="button" id="prev-day" class="day-nav-btn" aria-label="Previous day">‹</button>
+        <button type="button" id="today-btn" class="day-nav-btn day-nav-today">Today</button>
+        <button type="button" id="next-day" class="day-nav-btn" aria-label="Next day">›</button>
+      </div>
+    </div>
     <h1 id="today-date"></h1>
+    <div class="week-strip" id="week-strip" role="group" aria-label="Week"></div>
   </header>
 
   <main class="panels">
