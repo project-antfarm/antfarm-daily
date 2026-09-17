@@ -207,3 +207,62 @@ section after `<main>`, rather than a fourth grid item, means the existing
 640px two-column grid (#16) needs no changes and the week panel simply
 occupies its own full-width row underneath at every width — deliberate
 placement rather than a box dropped onto the grid.
+
+## 2026-09-17 — Deadlines and approaching-work surfacing (Issue #20)
+
+**`deadlines` is a new top-level list, sibling of `days` and `weeks`.**
+`deadlines: [{ id, text, due, completed }]`, `due` a `YYYY-MM-DD` string.
+The #12 entry anticipated this: a deadline is "work with a deadline",
+distinct from "work planned for today" or a week's goals, and isn't owned
+by any single day or week the way `days[key]` or `weeks[key]` items are —
+so it doesn't fit under either map without picking an arbitrary owner.
+A flat list (not keyed by day) is enough since nothing needs to look up a
+deadline by date; `getDeadlines` sorts on every read instead.
+
+**`getDeadlines(state)` normalises a missing `deadlines` list on read;
+`version` is not bumped.** Same approach as `getDay` (#16, missing
+`commitments`) and `getWeek` (#18, missing `weeks`): every payload already
+in a real browser's `localStorage` predates this feature and has no
+`deadlines` key, so `state.deadlines` is `undefined` there. One accessor
+absorbing `?? []` fixes every caller (render, the summary, add/toggle/
+remove) at once, and there's nothing to migrate — old payloads are valid,
+just partial.
+
+**Relative label and the "approaching" threshold: 7 days, one threshold for
+both the label and the summary.** `deadlineLabel` (pure, in `state.js`)
+returns `Overdue`, `Due today`, `Due tomorrow`, `Due in N days` for `N` up
+to 7, or a formatted date beyond that — past a week out, which specific day
+it is matters more to a person than a count of days. `approachingSummary`
+counts "due soon" using that same 7-day window, so the wording on an item
+and the count in the one-line summary never disagree about what "soon"
+means. Using two different thresholds (e.g. 7 days for the label, 3 for the
+summary) would be arbitrary and would make the summary and the list read as
+if they were describing different things.
+
+**Urgency computed from a fresh `todayKey()` at render time, not the
+selected day.** `renderDeadlinesPanel` (and the pure `deadlineLabel`/
+`approachingSummary` it calls) takes `todayKey()` freshly on every
+`render()`, the same reason #14 introduced `activeDay()` instead of a
+constant captured once: a deadline's urgency describes its distance from
+the real, current day, and must not change just because the person
+navigated to look at a different day or week.
+
+**Validation reuses `todayKey`/`parseKey`, no new date arithmetic.** A due
+date is valid when it matches `YYYY-MM-DD` and round-trips through
+`parseKey` → `todayKey` unchanged (catching e.g. `2026-02-30`, which
+`Date` would otherwise silently roll into March). Empty text and a missing
+or invalid due date share one `'empty'` error and one visible message,
+mirroring how a commitment's missing time already works — past due dates
+are not an error, since recording something already late is legitimate.
+
+**Panel placement: a third full-width section, after the week panel, both
+now inside `<main>`.** GOAL.md requires the day to stay first at every
+width, so the Upcoming panel is a sibling `<section>` after `.week-panel`,
+not a member of the day-panels grid — it never pushes priorities/tasks/
+commitments down, at 360px or at desktop widths, because it only ever
+renders below them in source order. This also folds in the two accepted
+#19 review findings: `.panels` (priorities/tasks/commitments) is now a
+`<div>` nested inside a `<main>` that also wraps `.week-panel` and
+`.upcoming-panel`, so both sit inside the `main` landmark; and the week
+heading now reads "Week of {date}" instead of "This Week" whenever the
+selected day's week isn't the current one.

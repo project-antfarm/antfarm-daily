@@ -16,6 +16,12 @@ import {
   addGoal,
   toggleGoal,
   removeGoal,
+  getDeadlines,
+  addDeadline,
+  toggleDeadline,
+  removeDeadline,
+  deadlineLabel,
+  approachingSummary,
   MAX_PRIORITIES,
 } from './state.js';
 
@@ -56,6 +62,15 @@ const weekGoalsEmpty = document.getElementById('week-goals-empty');
 const goalForm = document.getElementById('goal-form');
 const goalInput = document.getElementById('goal-input');
 const goalMsg = document.getElementById('goal-msg');
+const weekHeading = document.getElementById('week-heading');
+
+const deadlinesList = document.getElementById('deadlines-list');
+const deadlinesEmpty = document.getElementById('deadlines-empty');
+const deadlinesSummary = document.getElementById('deadlines-summary');
+const deadlineForm = document.getElementById('deadline-form');
+const deadlineInput = document.getElementById('deadline-input');
+const deadlineDueInput = document.getElementById('deadline-due-input');
+const deadlineMsg = document.getElementById('deadline-msg');
 
 let state = load();
 
@@ -85,6 +100,10 @@ function formatDate(key) {
     month: 'long',
     day: 'numeric',
   });
+}
+
+function formatDueDate(key) {
+  return parseKey(key).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function renderItem(key, list, item, index) {
@@ -196,14 +215,79 @@ function renderGoal(weekKey, item) {
   return li;
 }
 
+function renderDeadline(item, today) {
+  const li = document.createElement('li');
+  li.className = 'item' + (item.completed ? ' is-complete' : '');
+  li.dataset.id = item.id;
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'item-toggle';
+  toggle.setAttribute('aria-pressed', String(item.completed));
+  toggle.addEventListener('click', () => {
+    state = toggleDeadline(state, item.id);
+    save(state);
+    render();
+  });
+
+  const check = document.createElement('span');
+  check.className = 'item-check';
+  check.setAttribute('aria-hidden', 'true');
+  check.textContent = item.completed ? '✓' : '';
+  toggle.appendChild(check);
+
+  const text = document.createElement('span');
+  text.className = 'item-text';
+  text.textContent = item.text;
+  toggle.appendChild(text);
+
+  const due = document.createElement('span');
+  due.className = 'item-due';
+  due.textContent = formatDueDate(item.due);
+  toggle.appendChild(due);
+
+  const urgency = document.createElement('span');
+  urgency.className = 'item-urgency';
+  urgency.textContent = deadlineLabel(item.due, today);
+  toggle.appendChild(urgency);
+
+  const status = document.createElement('span');
+  status.className = 'sr-only';
+  status.textContent = item.completed ? ' (completed)' : ' (not completed)';
+  toggle.appendChild(status);
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'item-delete';
+  del.setAttribute('aria-label', `Delete "${item.text}"`);
+  del.textContent = '✕';
+  del.addEventListener('click', () => {
+    if (!window.confirm(`Delete "${item.text}"? This cannot be undone.`)) return;
+    state = removeDeadline(state, item.id);
+    save(state);
+    render();
+  });
+
+  li.append(toggle, del);
+  return li;
+}
+
 function progressLabel({ completed, total }) {
   if (total === 0) return 'No planned work yet this week.';
   return `${completed} of ${total} done this week`;
 }
 
+function weekHeadingText(dayKey) {
+  const weekKey = weekStart(dayKey);
+  if (weekKey === weekStart(todayKey())) return 'This Week';
+  return `Week of ${formatDueDate(weekKey)}`;
+}
+
 function renderWeekPanel(dayKey) {
   const weekKey = weekStart(dayKey);
   const week = getWeek(state, weekKey);
+
+  weekHeading.textContent = weekHeadingText(dayKey);
 
   weekGoalsList.innerHTML = '';
   weekGoalsEmpty.hidden = week.goals.length > 0;
@@ -213,6 +297,16 @@ function renderWeekPanel(dayKey) {
   weekProgressText.textContent = progressLabel(progress);
   const percent = progress.total === 0 ? 0 : Math.round((progress.completed / progress.total) * 100);
   weekProgressFill.style.width = `${percent}%`;
+}
+
+function renderDeadlinesPanel() {
+  const today = todayKey();
+  const deadlines = getDeadlines(state);
+
+  deadlinesList.innerHTML = '';
+  deadlinesEmpty.hidden = deadlines.length > 0;
+  deadlines.forEach((item) => deadlinesList.appendChild(renderDeadline(item, today)));
+  deadlinesSummary.textContent = approachingSummary(deadlines, today);
 }
 
 function renderWeekStrip(key) {
@@ -279,9 +373,11 @@ function render() {
   inputs.priorities.disabled = atLimit;
   commitmentMsg.hidden = true;
   goalMsg.hidden = true;
+  deadlineMsg.hidden = true;
 
   renderWeekStrip(key);
   renderWeekPanel(key);
+  renderDeadlinesPanel();
 }
 
 function handleSubmit(list) {
@@ -325,6 +421,21 @@ goalForm.addEventListener('submit', (event) => {
   goalInput.value = '';
   render();
   goalInput.focus();
+});
+
+deadlineForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const result = addDeadline(state, deadlineInput.value, deadlineDueInput.value);
+  if (result.error === 'empty') {
+    deadlineMsg.hidden = false;
+    return;
+  }
+  state = result.state;
+  save(state);
+  deadlineInput.value = '';
+  deadlineDueInput.value = '';
+  render();
+  deadlineInput.focus();
 });
 
 prevBtn.addEventListener('click', () => selectDay(addDays(activeDay(), -1)));

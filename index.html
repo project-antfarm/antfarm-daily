@@ -21,7 +21,8 @@
     <div class="week-strip" id="week-strip" role="group" aria-label="Week"></div>
   </header>
 
-  <main class="panels">
+  <main>
+  <div class="panels">
     <section class="panel priorities-panel" aria-labelledby="priorities-heading">
       <div class="panel-head">
         <h2 id="priorities-heading">Priorities</h2>
@@ -71,7 +72,7 @@
         A commitment needs both a time and a description.
       </p>
     </section>
-  </main>
+  </div>
 
   <section class="panel week-panel" aria-labelledby="week-heading">
     <div class="panel-head">
@@ -97,6 +98,28 @@
       A goal needs some text.
     </p>
   </section>
+
+  <section class="panel upcoming-panel" aria-labelledby="upcoming-heading">
+    <div class="panel-head">
+      <h2 id="upcoming-heading">Upcoming</h2>
+    </div>
+    <p id="deadlines-summary" class="deadlines-summary" role="status"></p>
+    <ul id="deadlines-list" class="item-list deadlines-list" aria-labelledby="upcoming-heading"></ul>
+    <p id="deadlines-empty" class="empty-state">No deadlines yet — add something with a due date.</p>
+    <form id="deadline-form" class="add-form deadline-form">
+      <div class="deadline-form-fields">
+        <label class="sr-only" for="deadline-input">Add a deadline</label>
+        <input id="deadline-input" type="text" placeholder="Add a deadline…" autocomplete="off" maxlength="140">
+        <label class="sr-only" for="deadline-due-input">Due date</label>
+        <input id="deadline-due-input" type="date">
+      </div>
+      <button type="submit">Add</button>
+    </form>
+    <p id="deadline-msg" class="form-msg" role="status" hidden>
+      A deadline needs text and a valid due date.
+    </p>
+  </section>
+  </main>
 </div>
 <script type="module" src="./app.js"></script>
 </body>

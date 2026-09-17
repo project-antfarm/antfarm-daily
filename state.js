@@ -50,7 +50,7 @@ function emptyWeek() {
 }
 
 function emptyState() {
-  return { version: 1, days: {}, weeks: {} };
+  return { version: 1, days: {}, weeks: {}, deadlines: [] };
 }
 
 function sortByTime(commitments) {
@@ -179,4 +179,88 @@ export function removeGoal(state, weekKey, id) {
   const week = getWeek(state, weekKey);
   const nextWeek = { ...week, goals: week.goals.filter((item) => item.id !== id) };
   return withWeek(state, weekKey, nextWeek);
+}
+
+// A deadline is not tied to any single day, so it lives at the top level
+// (`state.deadlines`) rather than under `days[key]` — the same reasoning
+// #12 anticipated and #18 followed for week goals.
+function isValidDateKey(key) {
+  if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+  return todayKey(parseKey(key)) === key;
+}
+
+function withDeadlines(state, deadlines) {
+  return { ...state, deadlines };
+}
+
+// Normalises a missing `deadlines` list on read, the same way `getDay`
+// (#16) and `getWeek` (#18) absorb payloads written before this feature —
+// and returns it sorted by `due` ascending so no caller re-sorts.
+export function getDeadlines(state) {
+  const deadlines = state.deadlines ?? [];
+  return [...deadlines].sort((a, b) => a.due.localeCompare(b.due));
+}
+
+// Returns { state, error } where error is null or 'empty' — covering both
+// missing text and a missing/unparseable due date, the same one-message
+// pattern `addItem` already uses for a commitment missing its time.
+export function addDeadline(state, text, due) {
+  const trimmed = text.trim();
+  if (!trimmed || !isValidDateKey(due)) return { state, error: 'empty' };
+  const item = { id: crypto.randomUUID(), text: trimmed, due, completed: false };
+  const deadlines = state.deadlines ?? [];
+  return { state: withDeadlines(state, [...deadlines, item]), error: null };
+}
+
+export function toggleDeadline(state, id) {
+  const deadlines = state.deadlines ?? [];
+  const next = deadlines.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item));
+  return withDeadlines(state, next);
+}
+
+export function removeDeadline(state, id) {
+  const deadlines = state.deadlines ?? [];
+  const next = deadlines.filter((item) => item.id !== id);
+  return withDeadlines(state, next);
+}
+
+// The "approaching" window: within this many days, urgency is a count
+// ("due in N days"); beyond it, the calendar date matters more than the
+// count, so the label switches to a plain date. The same threshold drives
+// `approachingSummary`'s "due soon" count, so the label wording and the
+// summary count never disagree about what "soon" means.
+const APPROACHING_DAYS = 7;
+
+function daysBetween(fromKey, toKey) {
+  return Math.round((parseKey(toKey) - parseKey(fromKey)) / 86400000);
+}
+
+// Pure text label for a deadline's urgency, computed against `todayKey`
+// (always the real today at render time, per #14's `activeDay()` — never
+// the selected day) rather than a color or position, so it reads the same
+// in grayscale or to a screen reader.
+export function deadlineLabel(due, todayKeyValue) {
+  const diff = daysBetween(todayKeyValue, due);
+  if (diff < 0) return 'Overdue';
+  if (diff === 0) return 'Due today';
+  if (diff === 1) return 'Due tomorrow';
+  if (diff <= APPROACHING_DAYS) return `Due in ${diff} days`;
+  return parseKey(due).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// One line answering "is anything important approaching?" without reading
+// the whole list. Completed deadlines are excluded from both counts, so
+// finishing something already late removes it from "overdue".
+export function approachingSummary(deadlines, todayKeyValue) {
+  if (deadlines.length === 0) return 'No deadlines yet.';
+  const active = deadlines.filter((item) => !item.completed);
+  const overdue = active.filter((item) => item.due < todayKeyValue).length;
+  const dueSoon = active.filter(
+    (item) => item.due >= todayKeyValue && daysBetween(todayKeyValue, item.due) <= APPROACHING_DAYS
+  ).length;
+  if (overdue === 0 && dueSoon === 0) return 'Nothing due soon.';
+  const parts = [];
+  if (overdue > 0) parts.push(`${overdue} overdue`);
+  if (dueSoon > 0) parts.push(`${dueSoon} due soon`);
+  return `${parts.join(', ')}.`;
 }
