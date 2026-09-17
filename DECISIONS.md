@@ -155,3 +155,55 @@ full-width row is deliberate and predictable at every width above 640px.
 At 360px all three panels stack full-width in source order (Priorities,
 Tasks, Commitments) with no layout change needed beyond what #12 already
 established.
+
+## 2026-09-17 — Weekly goals and week progress (Issue #18)
+
+**`weeks` is a new top-level map, sibling of `days`.** `weeks: { "YYYY-MM-DD":
+{ goals: [{ id, text, completed }] } }`, keyed by `weekStart(selectedDay)`
+(the Monday of that week), reusing the existing `{ id, text, completed }`
+item shape. A goal belongs to a week, not a day, so it cannot live under
+`days[key]` without picking one arbitrary day to own it — keying by the
+week's Monday instead makes "which week is this goal in" independent of
+which day happens to be selected.
+
+**`getWeek(state, key)` normalises a missing `weeks` map on read; `version`
+is not bumped.** Every payload already in a real browser's `localStorage`
+was written before this Issue and has no `weeks` key at all, so
+`state.weeks` is `undefined` there. `getWeek` does `state.weeks?.[key]` and
+falls back to `{ goals: [] }`, the same normalise-on-read approach `getDay`
+already uses for `commitments` (#16): one place absorbs the gap instead of a
+guard at every call site, and there is nothing to migrate since old payloads
+are valid, just partial. `addGoal`/`toggleGoal`/`removeGoal` write through a
+`withWeek` helper that spreads `state.weeks` (spreading `undefined` is a
+no-op in JS), so the first goal ever added on an old payload creates the
+`weeks` map on the fly.
+
+**Dedicated `addGoal`/`toggleGoal`/`removeGoal`, not a generalised
+`addItem`/`toggleItem`/`removeItem`.** The existing three functions key into
+`state.days` by day key across a fixed set of lists (with a priorities
+limit); goals key into `state.weeks` by week key with a single list and no
+limit. Generalising them would mean branching on which top-level map and
+key to use on every call, which reads worse than three short week-scoped
+functions that mirror the day ones' shape.
+
+**Progress: `weekProgress(state, dayKey)` in `state.js`, sums priorities +
+tasks + commitments across the week's seven days.** It calls the existing
+`weekKeys`/`getDay` rather than new date logic, so it inherits the
+Monday-start boundary for free. Week goals are excluded from the count —
+they are their own checklist with their own list, and mixing them into the
+day-items total would double-count "progress" against two different units
+(a goal vs. a task). An empty week renders as "No planned work yet this
+week." (no `NaN`, no claim of completion); a non-empty week renders as
+"`{completed}` of `{total}` done this week", backed by a `<progress-fill>`
+bar whose width is decorative (`aria-hidden`) and derived from the same
+numbers already in the text, so the fact never depends on the bar rendering
+correctly.
+
+**Week panel placement: its own `<section>` below `<main class="panels">`,
+not inside the panels grid.** GOAL.md requires the day to be immediately
+understandable without extra navigation, so priorities/tasks/commitments
+must stay first regardless of viewport. Making the week panel a sibling
+section after `<main>`, rather than a fourth grid item, means the existing
+640px two-column grid (#16) needs no changes and the week panel simply
+occupies its own full-width row underneath at every width — deliberate
+placement rather than a box dropped onto the grid.

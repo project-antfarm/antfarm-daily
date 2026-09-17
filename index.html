@@ -72,6 +72,31 @@
       </p>
     </section>
   </main>
+
+  <section class="panel week-panel" aria-labelledby="week-heading">
+    <div class="panel-head">
+      <h2 id="week-heading">This Week</h2>
+    </div>
+
+    <div class="week-progress">
+      <p id="week-progress-text" class="week-progress-text"></p>
+      <div class="progress-bar" aria-hidden="true">
+        <div id="week-progress-fill" class="progress-fill"></div>
+      </div>
+    </div>
+
+    <h3 id="week-goals-heading" class="week-goals-heading">Goals</h3>
+    <ul id="week-goals-list" class="item-list goals-list" aria-labelledby="week-goals-heading"></ul>
+    <p id="week-goals-empty" class="empty-state">No goals yet — what do you want from this week?</p>
+    <form id="goal-form" class="add-form">
+      <label class="sr-only" for="goal-input">Add a goal for the week</label>
+      <input id="goal-input" type="text" placeholder="Add a goal for the week…" autocomplete="off" maxlength="140">
+      <button type="submit">Add</button>
+    </form>
+    <p id="goal-msg" class="form-msg" role="status" hidden>
+      A goal needs some text.
+    </p>
+  </section>
 </div>
 <script type="module" src="./app.js"></script>
 </body>

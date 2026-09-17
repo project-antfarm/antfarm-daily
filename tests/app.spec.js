@@ -15,6 +15,13 @@ async function addCommitment(page, text, time) {
   await input.press('Enter');
 }
 
+async function addGoal(page, text) {
+  const input = page.locator('#goal-input');
+  await input.focus();
+  await input.fill(text);
+  await input.press('Enter');
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
@@ -470,4 +477,193 @@ test('captures screenshots of a day with priorities, tasks and two commitments',
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: 'screenshots/commitments-desktop-1280.png' });
+});
+
+test('adds a week goal and it survives a reload', async ({ page }) => {
+  await addGoal(page, 'Ship the weekly goals feature');
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(1);
+  await expect(page.locator('#week-goals-list .item-text')).toHaveText('Ship the weekly goals feature');
+
+  await page.reload();
+
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(1);
+  await expect(page.locator('#week-goals-list .item-text')).toHaveText('Ship the weekly goals feature');
+});
+
+test('a week goal can be completed, un-completed and deleted, each surviving a reload', async ({ page }) => {
+  await addGoal(page, 'Write the newsletter');
+  const item = page.locator('#week-goals-list .item').first();
+  const toggle = item.locator('.item-toggle');
+
+  await toggle.click();
+  await expect(item).toHaveClass(/is-complete/);
+  await page.reload();
+  await expect(page.locator('#week-goals-list .item')).toHaveClass(/is-complete/);
+
+  await page.locator('#week-goals-list .item-toggle').click();
+  await expect(page.locator('#week-goals-list .item')).not.toHaveClass(/is-complete/);
+  await page.reload();
+  await expect(page.locator('#week-goals-list .item')).not.toHaveClass(/is-complete/);
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#week-goals-list .item-delete').click();
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
+});
+
+test('submitting the goal form with empty text adds nothing and shows a message', async ({ page }) => {
+  await page.locator('#goal-input').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
+  await expect(page.locator('#goal-msg')).toBeVisible();
+});
+
+test('week goals belong to the week, not the day', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-16T09:00:00') }); // a Wednesday
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await addGoal(page, 'Only this week');
+  await expect(page.locator('#week-goals-list .item-text')).toHaveText('Only this week');
+
+  await page.locator('#next-day').click(); // Thursday, same week
+  await expect(page.locator('#week-goals-list .item-text')).toHaveText('Only this week');
+  await page.locator('#prev-day').click(); // back to Wednesday
+
+  for (let i = 0; i < 3; i++) await page.locator('#prev-day').click(); // Sunday, previous week
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
+
+  for (let i = 0; i < 3; i++) await page.locator('#next-day').click(); // back to Wednesday
+  await expect(page.locator('#week-goals-list .item-text')).toHaveText('Only this week');
+});
+
+test('week progress counts every list across the week and updates without a reload', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-16T09:00:00') }); // a Wednesday
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await expect(page.locator('#week-progress-text')).toHaveText('No planned work yet this week.');
+
+  await addItem(page, 'priority', 'Ship the feature');
+  await addItem(page, 'task', 'Write the tests');
+  await addCommitment(page, 'Standup', '09:30');
+
+  await page.locator('#next-day').click(); // Thursday, same week
+  await addItem(page, 'task', 'Second day task');
+  await expect(page.locator('#week-progress-text')).toHaveText('0 of 4 done this week');
+
+  await page.locator('#tasks-list .item').first().locator('.item-toggle').click();
+  await expect(page.locator('#week-progress-text')).toHaveText('1 of 4 done this week');
+
+  await page.locator('#prev-day').click(); // back to Wednesday
+  await expect(page.locator('#week-progress-text')).toHaveText('1 of 4 done this week');
+  await page.locator('#priorities-list .item').first().locator('.item-toggle').click();
+  await expect(page.locator('#week-progress-text')).toHaveText('2 of 4 done this week');
+});
+
+test('a day stored by the previous version (no weeks key) still loads and accepts a new week goal', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const key = new Date().toISOString().slice(0, 10);
+    localStorage.setItem(
+      'antfarm.daily.v1',
+      JSON.stringify({
+        version: 1,
+        days: {
+          [key]: {
+            priorities: [{ id: 'p1', text: 'Old priority', completed: false }],
+            tasks: [{ id: 't1', text: 'Old task', completed: false }],
+          },
+        },
+      })
+    );
+  });
+
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e));
+  await page.reload();
+
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
+  await expect(page.locator('#week-goals-empty')).toBeVisible();
+  await expect(page.locator('#week-progress-text')).toHaveText('0 of 2 done this week');
+  expect(errors).toHaveLength(0);
+
+  await addGoal(page, 'First goal after upgrade');
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(1);
+});
+
+test('the week goals panel is fully keyboard-operable', async ({ page }) => {
+  await page.locator('#goal-input').focus();
+  let outline = await page.locator('#goal-input').evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.type('Plan the sprint');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(1);
+
+  const toggle = page.locator('#week-goals-list .item-toggle');
+  await expect(toggle).toHaveAccessibleName(/.+/);
+  await toggle.focus();
+  outline = await toggle.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#week-goals-list .item')).toHaveClass(/is-complete/);
+
+  const del = page.locator('#week-goals-list .item-delete');
+  await expect(del).toHaveAccessibleName(/.+/);
+  await del.focus();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
+});
+
+test('completed week goals stay visible and distinguishable by more than color; progress figure stands alone', async ({
+  page,
+}) => {
+  await addGoal(page, 'Finish the roadmap doc');
+  const item = page.locator('#week-goals-list .item').first();
+  await item.locator('.item-toggle').click();
+
+  await expect(item).toBeVisible();
+  await expect(item).toHaveClass(/is-complete/);
+  await expect(item.locator('.item-text')).toHaveCSS('text-decoration-line', 'line-through');
+
+  await addItem(page, 'task', 'A task for progress');
+  await expect(page.locator('#week-progress-text')).not.toBeEmpty();
+  await expect(page.locator('.progress-bar')).toHaveAttribute('aria-hidden', 'true');
+});
+
+test('no horizontal scroll at 360px with priorities, tasks, commitments and week goals populated', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await addItem(page, 'priority', 'A reasonably long priority to check wrapping behaves');
+  await addItem(page, 'task', 'Another moderately long task description to check wrapping');
+  await addCommitment(page, 'A rather long commitment title to check panel wrapping behaves', '09:00');
+  await addGoal(page, 'A fairly long week goal to check that wrapping behaves nicely too');
+  await addGoal(page, 'Second goal');
+  const fits = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  );
+  expect(fits).toBe(true);
+});
+
+test('captures screenshots of a populated day and a week panel with partial progress', async ({ page }) => {
+  await addItem(page, 'priority', 'Ship the weekly goals feature');
+  await addItem(page, 'task', 'Write the tests');
+  await addCommitment(page, 'Standup', '09:30');
+  await page.locator('#tasks-list .item').first().locator('.item-toggle').click();
+
+  await addGoal(page, 'Close out the Weekly Awareness section');
+  await addGoal(page, 'Review open issues');
+  await page.locator('#week-goals-list .item').first().locator('.item-toggle').click();
+
+  await page.setViewportSize({ width: 360, height: 1100 });
+  await page.screenshot({ path: 'screenshots/week-panel-mobile-360.png' });
+
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.screenshot({ path: 'screenshots/week-panel-desktop-1280.png' });
 });

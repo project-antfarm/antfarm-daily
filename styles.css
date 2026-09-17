@@ -393,6 +393,44 @@ body {
   outline-offset: 2px;
 }
 
+.week-panel {
+  margin-top: 20px;
+  border-top: 4px double var(--accent-text);
+}
+
+.week-progress {
+  margin-bottom: 20px;
+}
+
+.week-progress-text {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+
+.week-goals-heading {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 @media (min-width: 640px) {
   .panels {
     grid-template-columns: 1fr 1fr;
