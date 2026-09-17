@@ -266,3 +266,27 @@ renders below them in source order. This also folds in the two accepted
 `.upcoming-panel`, so both sit inside the `main` landmark; and the week
 heading now reads "Week of {date}" instead of "This Week" whenever the
 selected day's week isn't the current one.
+
+## 2026-09-17 — Deadline row layout and label fix (Issue #20 review)
+
+**Beyond the approaching window, `deadlineLabel` returns `''`, not a
+formatted date.** `.item-due` already shows the due date next to every
+deadline; having `deadlineLabel`'s far-out fallback repeat that same
+formatted date in `.item-urgency` printed it twice side by side. The
+urgency chip (`.item-meta .item-urgency`) is now only rendered by `app.js`
+when the label is non-empty — no urgency to report beyond a week out means
+no second element, not an empty one.
+
+**`.item-due` and the (optional) `.item-urgency` chip live in one
+`.item-meta` wrapper that gets its own line on the deadlines list.**
+At 360px the previous flat row (`checkbox, text, due, urgency, delete`, all
+but `text` pinned `flex-shrink: 0; white-space: nowrap`) squeezed
+`.item-text` to near zero width, so its `overflow-wrap: anywhere` broke it
+one character per line. `.deadlines-list .item-toggle` now sets
+`flex-wrap: wrap` and `.item-meta` carries `flex-basis: 100%`, forcing the
+date/urgency group onto a second line below the text (indented to align
+under it) instead of competing with it for width on the first line. Scoped
+to `.deadlines-list` only, per the review's caution not to touch the shared
+`.item-text` rule the other three panels depend on. Pinned by a height
+assertion on `.item-text` at 360px in `tests/app.spec.js` (a small multiple
+of its line-height), the narrowest check that fails under the old layout.

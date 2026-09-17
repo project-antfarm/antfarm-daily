@@ -241,15 +241,23 @@ function renderDeadline(item, today) {
   text.textContent = item.text;
   toggle.appendChild(text);
 
+  const meta = document.createElement('span');
+  meta.className = 'item-meta';
+
   const due = document.createElement('span');
   due.className = 'item-due';
   due.textContent = formatDueDate(item.due);
-  toggle.appendChild(due);
+  meta.appendChild(due);
 
-  const urgency = document.createElement('span');
-  urgency.className = 'item-urgency';
-  urgency.textContent = deadlineLabel(item.due, today);
-  toggle.appendChild(urgency);
+  const label = deadlineLabel(item.due, today);
+  if (label) {
+    const urgency = document.createElement('span');
+    urgency.className = 'item-urgency';
+    urgency.textContent = label;
+    meta.appendChild(urgency);
+  }
+
+  toggle.appendChild(meta);
 
   const status = document.createElement('span');
   status.className = 'sr-only';

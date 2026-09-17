@@ -442,6 +442,18 @@ body {
   font-weight: 600;
 }
 
+.deadlines-list .item-toggle {
+  flex-wrap: wrap;
+}
+
+.item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-basis: 100%;
+  margin-left: 30px;
+}
+
 .item-due {
   flex-shrink: 0;
   font-size: 0.78rem;

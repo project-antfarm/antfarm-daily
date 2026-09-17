@@ -763,7 +763,12 @@ test('the summary line reads sensibly with zero deadlines and updates without a 
 });
 
 test('deadlines are independent of the selected day and week, with an unchanging label', async ({ page }) => {
-  await addDeadline(page, 'Cross-cutting deadline', '2026-12-01');
+  await page.clock.install({ time: new Date('2026-09-17T09:00:00') });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await addDeadline(page, 'Cross-cutting deadline', '2026-09-22');
   const urgencyBefore = await page.locator('#deadlines-list .item-urgency').innerText();
 
   await page.locator('#prev-day').click();
@@ -868,6 +873,14 @@ test('no horizontal scroll at 360px with priorities, tasks, commitments, week go
     () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
   );
   expect(fits).toBe(true);
+
+  // Pins the one-character-per-line regression: the due date and urgency
+  // chip used to crowd .item-text down to near-zero width, wrapping its
+  // text one letter per line instead of by word.
+  const text = page.locator('#deadlines-list .item-text').first();
+  const box = await text.boundingBox();
+  const lineHeight = await text.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  expect(box.height).toBeLessThan(lineHeight * 6);
 });
 
 test('captures screenshots of a populated day and an Upcoming panel with overdue and future deadlines', async ({

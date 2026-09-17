@@ -238,14 +238,17 @@ function daysBetween(fromKey, toKey) {
 // Pure text label for a deadline's urgency, computed against `todayKey`
 // (always the real today at render time, per #14's `activeDay()` — never
 // the selected day) rather than a color or position, so it reads the same
-// in grayscale or to a screen reader.
+// in grayscale or to a screen reader. Beyond the approaching window there is
+// no urgency to report — the due date itself (already shown next to the
+// item) is all that matters — so it returns '' rather than repeating that
+// date in a second place.
 export function deadlineLabel(due, todayKeyValue) {
   const diff = daysBetween(todayKeyValue, due);
   if (diff < 0) return 'Overdue';
   if (diff === 0) return 'Due today';
   if (diff === 1) return 'Due tomorrow';
   if (diff <= APPROACHING_DAYS) return `Due in ${diff} days`;
-  return parseKey(due).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return '';
 }
 
 // One line answering "is anything important approaching?" without reading
