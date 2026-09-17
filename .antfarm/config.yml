@@ -1,15 +1,15 @@
 # Colony limits. Read by workflows, never by prompts. Human-owned.
 # All counters are recomputed from the telemetry event files before any model
 # starts, and only executions that consumed tokens count.
-run: run-001
+run: run-002
 telemetry_repo: project-antfarm/antfarm-telemetry
 queen:
   model: claude-opus-5
   max_turns: 30
   runs_per_day: 6
-  # Seconds to wait before starting when woken by a finished CI run, so that
-  # external reviewers have time to post.
-  review_delay_seconds: 300
+  # When woken by a finished CI run, wait until the external reviewer has
+  # reviewed that commit, polling every 20s, for at most this many seconds.
+  review_wait_max_seconds: 600
 worker:
   model: claude-sonnet-5
   max_turns: 60

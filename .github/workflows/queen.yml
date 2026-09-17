@@ -28,7 +28,7 @@ jobs:
       - name: read config
         id: cfg
         run: |
-          for k in run telemetry_repo queen.model queen.max_turns queen.runs_per_day queen.review_delay_seconds budget.weekly_cost_usd ready_max attempts_max lease_hours; do
+          for k in run telemetry_repo queen.model queen.max_turns queen.runs_per_day queen.review_wait_max_seconds budget.weekly_cost_usd ready_max attempts_max lease_hours; do
             echo "${k//./_}=$(yq ".$k" .antfarm/config.yml)" >> "$GITHUB_OUTPUT"
           done
           echo "started_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
@@ -67,9 +67,25 @@ jobs:
               gh issue comment "$n" --body "Lease expired after ${age}h without a PR. Back to ready."
             fi
           done
-      - name: give external reviewers time to post
+      - name: wait for the external review of this commit
         if: steps.guard.outputs.skip != 'true' && github.event_name == 'workflow_run'
-        run: sleep "${{ steps.cfg.outputs.queen_review_delay_seconds }}"
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          SINCE: ${{ github.event.workflow_run.run_started_at }}
+          MAX: ${{ steps.cfg.outputs.queen_review_wait_max_seconds }}
+        run: |
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          [ -n "$pr" ] || { echo "no open PR for $BRANCH"; exit 0; }
+          end=$(( $(date +%s) + MAX ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            reviews=$(gh api "repos/$GH_REPO/pulls/$pr/reviews" --jq "[.[] | select(.user.login | startswith(\"chatgpt-codex-connector\")) | select(.commit_id == \"$SHA\")] | length")
+            thumbs=$(gh api "repos/$GH_REPO/issues/$pr/reactions" --jq "[.[] | select(.user.login | startswith(\"chatgpt-codex-connector\")) | select(.content == \"+1\" and .created_at >= \"$SINCE\")] | length")
+            if [ "$reviews" != 0 ] || [ "$thumbs" != 0 ]; then echo "external review present (reviews=$reviews thumbs=$thumbs)"; exit 0; fi
+            sleep 20
+          done
+          echo "no external review within ${MAX}s; proceeding without it"
       - name: record guard block
         if: steps.guard.outputs.log == 'log'
         env:
@@ -94,7 +110,7 @@ jobs:
             Follow `.antfarm/queen.md` exactly. Repository: ${{ github.repository }}.
             Deployed site: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
             Limits set by the infrastructure (you cannot change them):
-            - ready_max: ${{ steps.cfg.outputs.ready_max }} (Issues labelled ready or in-progress at once)
+            - ready_max: ${{ steps.cfg.outputs.ready_max }} (work in flight: open Issues labelled ready, in-progress or needs-fix, plus open PRs; enforced by the infrastructure, which parks any Issue labelled ready beyond it)
             - attempts_max: ${{ steps.cfg.outputs.attempts_max }} fix attempts per Issue before it is blocked
             - Queen runs today: ${{ steps.guard.outputs.runs_today }} of ${{ steps.cfg.outputs.queen_runs_per_day }} before this one
             - Colony budget this week: ${{ steps.guard.outputs.cost_week }} of ${{ steps.cfg.outputs.budget_weekly_cost_usd }} (conservative US$ estimate; when it runs out every agent stops until Sunday 16:00 UTC)

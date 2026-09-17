@@ -28,7 +28,7 @@ jobs:
       - name: read config
         id: cfg
         run: |
-          for k in run telemetry_repo worker.model worker.max_turns attempts_max; do
+          for k in run telemetry_repo worker.model worker.max_turns attempts_max ready_max; do
             echo "${k//./_}=$(yq ".$k" .antfarm/config.yml)" >> "$GITHUB_OUTPUT"
           done
           echo "started_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
@@ -54,6 +54,7 @@ jobs:
           ISSUE: ${{ github.event.inputs.issue || github.event.issue.number }}
           TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
           ATTEMPTS_MAX: ${{ steps.cfg.outputs.attempts_max }}
+          READY_MAX: ${{ steps.cfg.outputs.ready_max }}
         run: |
           # block <reason> [log]: skip the model; "log" also records a guard.blocked event
           block() { echo "blocked: $1"; { echo "skip=true"; echo "reason=$1"; echo "log=${2:-}"; } >> "$GITHUB_OUTPUT"; exit 0; }
@@ -61,6 +62,18 @@ jobs:
           [ "$ENABLED" = "true" ] || block kill_switch
           labels=$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name]|join(" ")')
           case " $labels " in *" ready "*|*" needs-fix "*) ;; *) block not_ready;; esac
+          # Work-in-flight lock. New work may not start while other Issues are
+          # ready, in progress or being fixed, or while a colony PR is open: it
+          # would branch from a main that lacks what is still under review.
+          if [[ " $labels " == *" ready "* ]]; then
+            others=$(gh issue list --state open --limit 200 --json number,labels --jq "[.[] | select(.number != $ISSUE) | select([.labels[].name] | any(. == \"ready\" or . == \"in-progress\" or . == \"needs-fix\"))] | length")
+            prs=$(gh pr list --state open --limit 200 --json headRefName --jq '[.[] | select(.headRefName | startswith("ant/"))] | length')
+            if [ $((others + prs)) -ge "$READY_MAX" ]; then
+              gh issue edit "$ISSUE" --remove-label ready
+              gh issue comment "$ISSUE" --body "Parked by the infrastructure: work in flight is at the limit ($others other Issues, $prs open PRs, limit $READY_MAX). Label it \`ready\` again once that work is merged or closed."
+              block wip_limit log
+            fi
+          fi
           bash .antfarm/budget.sh worker || { rc=$?; [ "$rc" = 3 ] || exit "$rc"; block "$(grep -oP 'block_reason=\K.*' "$GITHUB_OUTPUT" | tail -1)" log; }
           attempt=0
           for l in $labels; do case "$l" in attempt:*) attempt="${l#attempt:}";; esac; done
