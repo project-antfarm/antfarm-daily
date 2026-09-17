@@ -11,6 +11,36 @@ export function todayKey(date = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
+export function parseKey(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function addDays(key, delta) {
+  const date = parseKey(key);
+  date.setDate(date.getDate() + delta);
+  return todayKey(date);
+}
+
+// Monday-start week (ISO-style), independent of locale.
+const WEEK_START_DAY = 1;
+
+export function weekStart(key) {
+  const date = parseKey(key);
+  const diff = (date.getDay() - WEEK_START_DAY + 7) % 7;
+  date.setDate(date.getDate() - diff);
+  return todayKey(date);
+}
+
+export function weekKeys(key) {
+  const start = weekStart(key);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
+export function dayHasWork(day) {
+  return day.priorities.length > 0 || day.tasks.length > 0;
+}
+
 function emptyDay() {
   return { priorities: [], tasks: [] };
 }

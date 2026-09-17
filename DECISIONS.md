@@ -57,3 +57,47 @@ background (6.1:1) and on white panels (6.7:1). All meet or exceed WCAG AA
 marked by a filled checkbox glyph + strikethrough text, not color alone;
 priorities are marked by a numbered badge + left border + separate panel,
 not color alone.
+
+## 2026-09-17 — Day navigation and week strip (Issue #14)
+
+**`selectedDay` is in-memory only, always starts at today.** It is a plain
+module-level `YYYY-MM-DD` string in `app.js`, never written to
+`localStorage`. Every read and write (`render()`, `addItem`/`toggleItem`/
+`removeItem` calls) goes through it. Reloading the page re-runs the module
+and re-initializes it to `todayKey()`, satisfying GOAL.md's "open the app →
+understand the day" — a stale selection from a previous session is never
+restored.
+
+**Midnight-rollover fix.** The old bug was `const key = todayKey()` computed
+once at module load and reused forever. The fix is not a timer: a
+`followingToday` boolean (true until the person explicitly navigates away
+from today, true again after they navigate back via "Today" or land on it
+via prev/next/week-strip) gates a small `activeDay()` helper that
+recomputes `todayKey()` fresh, at the moment it's called, whenever
+`followingToday` is true. `render()` and every write handler call
+`activeDay()` instead of closing over a stale constant, so a session left
+open across midnight starts writing to the new day the next time it renders
+or writes — with no `setInterval`/timer needed, since a person interacting
+with a stale page is what triggers the recompute.
+
+**Past and future days are editable.** `addItem`/`toggleItem`/`removeItem`
+already took a `key` argument (per the #12 schema decision); navigation
+just changes which key `app.js` passes. Nothing in `state.js` treats a
+day as read-only, and nothing was added to make it so — GOAL.md requires
+unfinished work to stay recoverable, and freezing past days would defeat
+that.
+
+**Week boundaries: fixed Monday start**, independent of locale
+(`state.js`'s `weekStart`/`weekKeys` use a constant `WEEK_START_DAY = 1`).
+Locale-derived week starts would make "which week am I in" vary silently
+between visitors and complicate testing (a fixed clock in a test can't also
+fix `Intl`'s locale-dependent first-day-of-week without stubbing `Intl`
+itself). A fixed Monday is a common convention and keeps the strip's
+boundaries deterministic and testable.
+
+**Week strip markers, none color-only.** Selected day: `aria-current="date"`
+plus a 2px solid border and bold day number. Today (when not selected): a
+dashed border. Has-work: a small dot rendered only when the day has at
+least one priority or task (`dayHasWork` in `state.js`), independent of the
+selected/today styling so all three can be signaled at once without relying
+on a background hue for any of them.
