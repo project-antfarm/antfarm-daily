@@ -2,7 +2,7 @@
 # All counters come from the Colony log ledger (Issue #1), so they measure
 # runs where a model actually executed, not workflow triggers.
 queen:
-  model: claude-sonnet-5
+  model: claude-opus-5
   max_turns: 30
   runs_per_day: 3
 worker:
