@@ -77,7 +77,7 @@ cat "$dir"/runs/"$SPECIMEN"/*/events/*.jsonl \
   | jq -s -L "$here" --arg t "$today" --arg s "$since" --arg run "$RUN" --arg sp "$SPECIMEN" --arg now "$now" \
     --argjson b "$(yq -o=json '.budget' "$here/config.yml")" \
     'include "ledger";
-     summary($t; $s; $b) + {
+     summary($t; $s; $b; $run) + {
        budget: { weekly_cost_usd: $b.weekly_cost_usd, weekly_tokens: $b.weekly_tokens },
        schema_version: 1, specimen: $sp, updated_at: $now, active_run: $run,
        run: ( [ .[] | select(.run == $run) ] | {

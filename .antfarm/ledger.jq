@@ -27,12 +27,14 @@ def cents: . * 100 | round / 100;
 # An execution counts toward limits only when a model consumed tokens.
 # Parameter names must not collide with the functions above: in jq, a `$role`
 # parameter also defines a function `role` that would shadow ours.
-def runs($r; $d):
-  [ .[] | select(role == $r and (.ts | startswith($d)) and tokens > 0) ] | length;
+# Daily limits count only the active run ($n), so a new run starts at zero.
+# The weekly budget below spans every run: it is real allowance consumption.
+def runs($r; $d; $n):
+  [ .[] | select(role == $r and .run == $n and (.ts | startswith($d)) and tokens > 0) ] | length;
 
-def summary($today; $since; $b):
+def summary($today; $since; $b; $n):
   {
-    today: { date: $today, queen_runs: runs("queen"; $today), worker_runs: runs("worker"; $today) },
+    today: { date: $today, run: $n, queen_runs: runs("queen"; $today; $n), worker_runs: runs("worker"; $today; $n) },
     week: {
       since: $since,
       tokens: ([ .[] | select(.ts >= $since) | tokens ] | add // 0),
