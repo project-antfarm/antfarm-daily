@@ -121,7 +121,7 @@ jobs:
           claude_args: |
             --model ${{ steps.cfg.outputs.worker_model }}
             --max-turns ${{ steps.cfg.outputs.worker_max_turns }}
-            --allowedTools "Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(rtk git:*),Bash(rtk gh:*),Bash(rtk npm:*),Bash(rtk npx:*),Bash(rtk node:*),Read,Edit,MultiEdit,Write,Glob,Grep,Skill"
+            --allowedTools "Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(cat:*),Bash(ls:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(rtk git:*),Bash(rtk gh:*),Bash(rtk npm:*),Bash(rtk npx:*),Bash(rtk node:*),Bash(rtk playwright:*),Bash(rtk read:*),Bash(rtk ls:*),Bash(rtk grep:*),Bash(rtk wc:*),Read,Edit,MultiEdit,Write,Glob,Grep,Skill"
             --json-schema '{"type":"object","properties":{"pr":{"type":"integer"},"summary":{"type":"string"}},"required":["summary"]}'
       - name: keep raw trace
         if: always() && steps.claude.outputs.execution_file != ''

@@ -22,6 +22,7 @@ if [ -n "${EXEC_FILE:-}" ] && [ -f "$EXEC_FILE" ]; then
      input_tokens:.usage.input_tokens, output_tokens:.usage.output_tokens,
      cache_read_tokens:.usage.cache_read_input_tokens,
      cache_create_tokens:.usage.cache_creation_input_tokens,
+     permission_denials:(.permission_denials // [] | length),
      terminal_reason:.terminal_reason, api_error_status:.api_error_status}
     | with_entries(select(.value != null))' "$EXEC_FILE" 2>/dev/null || echo '{}')
 fi
