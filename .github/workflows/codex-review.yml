@@ -1,0 +1,25 @@
+name: codex-review
+# Asks Codex for an external review on every colony PR. Codex only answers
+# mentions from a human account linked to ChatGPT, so the comment is posted
+# with a fine-grained token of the human owner. It is marked as automatic so
+# that it is never counted as a human intervention.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+permissions: {}
+jobs:
+  ask:
+    if: startsWith(github.head_ref, 'ant/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.CODEX_MENTION_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ENABLED: ${{ vars.ANTFARM_ENABLED }}
+        run: |
+          [ "$ENABLED" = "true" ] || { echo "kill switch off"; exit 0; }
+          [ -n "$GH_TOKEN" ] || { echo "CODEX_MENTION_TOKEN not set; skipping"; exit 0; }
+          gh pr comment "$PR" --body "@codex review
+          <!-- antfarm:auto external-review-request -->"
