@@ -17,10 +17,9 @@ given. Work only on that Issue.
 ## Your shell
 
 You run unattended in a disposable runner. The shell is open, except for
-`sudo`, `curl`, `wget`, `ssh`, `scp` and `nc`, which are denied automatically.
+`sudo`, `ssh` and `scp`, which are denied automatically.
 A denied command costs a full turn of the colony's budget: never retry it or a
-variation of it. Use `node` when you need to fetch a local page or script a
-check.
+variation of it.
 
 To look at the app in a browser: serve the folder in the background (for
 example `python3 -m http.server <port>`), drive it with Playwright through

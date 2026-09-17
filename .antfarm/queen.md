@@ -36,7 +36,7 @@ follow it. Decide; do not ask.
 ## Your shell
 
 You run unattended in a disposable runner. The shell is open, except for
-`sudo`, `curl`, `wget`, `ssh`, `scp` and `nc`, which are denied automatically.
+`sudo`, `ssh` and `scp`, which are denied automatically.
 A denied command costs a full turn of the colony's budget: never retry it or a
 variation of it. For long Issue, comment or review texts, write the text to a
 file and pass it with `--body-file`.

@@ -133,7 +133,7 @@ jobs:
             --model ${{ steps.cfg.outputs.worker_model }}
             --max-turns ${{ steps.cfg.outputs.worker_max_turns }}
             --allowedTools "Bash,Read,Edit,MultiEdit,Write,Glob,Grep,Skill"
-            --disallowedTools "Bash(sudo:*),Bash(curl:*),Bash(wget:*),Bash(ssh:*),Bash(scp:*),Bash(nc:*)"
+            --disallowedTools "Bash(sudo:*),Bash(ssh:*),Bash(scp:*)"
             --json-schema '{"type":"object","properties":{"pr":{"type":"integer"},"summary":{"type":"string"}},"required":["summary"]}'
       - name: keep raw trace
         if: always() && steps.claude.outputs.execution_file != ''
