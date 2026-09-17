@@ -22,20 +22,26 @@ const todayBtn = document.getElementById('today-btn');
 const listEls = {
   priorities: document.getElementById('priorities-list'),
   tasks: document.getElementById('tasks-list'),
+  commitments: document.getElementById('commitments-list'),
 };
 const emptyEls = {
   priorities: document.getElementById('priorities-empty'),
   tasks: document.getElementById('tasks-empty'),
+  commitments: document.getElementById('commitments-empty'),
 };
 const forms = {
   priorities: document.getElementById('priority-form'),
   tasks: document.getElementById('task-form'),
+  commitments: document.getElementById('commitment-form'),
 };
 const inputs = {
   priorities: document.getElementById('priority-input'),
   tasks: document.getElementById('task-input'),
+  commitments: document.getElementById('commitment-input'),
 };
+const timeInput = document.getElementById('commitment-time-input');
 const limitMsg = document.getElementById('priority-limit-msg');
+const commitmentMsg = document.getElementById('commitment-msg');
 
 let state = load();
 
@@ -88,6 +94,13 @@ function renderItem(key, list, item, index) {
     badge.setAttribute('aria-hidden', 'true');
     badge.textContent = String(index + 1);
     toggle.appendChild(badge);
+  }
+
+  if (list === 'commitments') {
+    const time = document.createElement('span');
+    time.className = 'item-time';
+    time.textContent = item.time;
+    toggle.appendChild(time);
   }
 
   const check = document.createElement('span');
@@ -174,7 +187,7 @@ function render() {
 
   const day = getDay(state, key);
 
-  for (const list of ['priorities', 'tasks']) {
+  for (const list of ['priorities', 'tasks', 'commitments']) {
     const items = day[list];
     listEls[list].innerHTML = '';
     emptyEls[list].hidden = items.length > 0;
@@ -184,6 +197,7 @@ function render() {
   const atLimit = day.priorities.length >= MAX_PRIORITIES;
   limitMsg.hidden = !atLimit;
   inputs.priorities.disabled = atLimit;
+  commitmentMsg.hidden = true;
 
   renderWeekStrip(key);
 }
@@ -193,15 +207,20 @@ function handleSubmit(list) {
     event.preventDefault();
     const key = activeDay();
     const input = inputs[list];
-    const result = addItem(state, key, list, input.value);
+    const time = list === 'commitments' ? timeInput.value : undefined;
+    const result = addItem(state, key, list, input.value, time);
     if (result.error === 'limit') {
       limitMsg.hidden = false;
       return;
     }
-    if (result.error === 'empty') return;
+    if (result.error === 'empty') {
+      if (list === 'commitments') commitmentMsg.hidden = false;
+      return;
+    }
     state = result.state;
     save(state);
     input.value = '';
+    if (list === 'commitments') timeInput.value = '';
     render();
     input.focus();
   };
@@ -209,6 +228,7 @@ function handleSubmit(list) {
 
 forms.priorities.addEventListener('submit', handleSubmit('priorities'));
 forms.tasks.addEventListener('submit', handleSubmit('tasks'));
+forms.commitments.addEventListener('submit', handleSubmit('commitments'));
 
 prevBtn.addEventListener('click', () => selectDay(addDays(activeDay(), -1)));
 nextBtn.addEventListener('click', () => selectDay(addDays(activeDay(), 1)));

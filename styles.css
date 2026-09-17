@@ -162,12 +162,13 @@ body {
 }
 
 .panels {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 20px;
 }
 
 .panel {
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -176,6 +177,10 @@ body {
 
 .priorities-panel {
   border-top: 4px solid var(--accent);
+}
+
+.commitments-panel {
+  border-top: 4px dashed var(--accent);
 }
 
 .panel-head {
@@ -225,6 +230,10 @@ body {
   border-left: 4px solid var(--accent);
 }
 
+.commitments-list .item {
+  border-left: 4px dashed var(--accent);
+}
+
 .item-toggle {
   flex: 1;
   display: flex;
@@ -256,6 +265,20 @@ body {
   background: var(--accent);
   color: #fff;
   font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.item-time {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 3px 6px;
+  border: 1px solid var(--muted);
+  border-radius: 5px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
@@ -309,6 +332,7 @@ body {
 .add-form {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .add-form input {
@@ -320,6 +344,22 @@ body {
   font: inherit;
   color: var(--text);
   background: var(--surface);
+}
+
+.commitment-form-fields {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.commitment-form-fields input[type='time'] {
+  flex: 0 1 130px;
+}
+
+.commitment-form-fields input[type='text'] {
+  flex: 1 1 160px;
 }
 
 .add-form input:disabled {
@@ -355,12 +395,11 @@ body {
 
 @media (min-width: 640px) {
   .panels {
-    flex-direction: row;
-    align-items: flex-start;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
   }
 
-  .panel {
-    flex: 1;
-    min-width: 0;
+  .commitments-panel {
+    grid-column: 1 / -1;
   }
 }

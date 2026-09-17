@@ -101,3 +101,57 @@ dashed border. Has-work: a small dot rendered only when the day has at
 least one priority or task (`dayHasWork` in `state.js`), independent of the
 selected/today styling so all three can be signaled at once without relying
 on a background hue for any of them.
+
+## 2026-09-17 — Scheduled commitments (Issue #16)
+
+**`commitments` item shape and time format.** A third per-day list,
+`commitments: [{ id, text, time, completed }]`, alongside `priorities` and
+`tasks`. `time` is a 24-hour `"HH:MM"` string (native `<input type="time">`'s
+own value format), stored and compared as a plain string — `"09:00" <
+"15:00"` holds under string comparison for any two valid `HH:MM` values, so
+no `Date` parsing is needed to sort or compare them.
+
+**`getDay` normalises missing lists on read; `version` is not bumped.**
+`getDay` now returns `priorities: day.priorities ?? []`, `tasks: day.tasks ??
+[]`, `commitments: day.commitments ?? []` instead of handing back whatever
+shape was stored. A real browser's `localStorage` already holds days written
+by the pre-commitments app (`{ priorities, tasks }` only, per the #12
+schema); once `emptyDay()` grows a `commitments` key, those records read back
+with `commitments: undefined` unless something fills the gap. `getDay` is the
+one function every read (`render`, `addItem`, `toggleItem`, `removeItem`) and
+the week strip's `dayHasWork` route through, so normalising there fixes every
+caller at once instead of guarding `.length`/`.map` at each call site. This
+was chosen over bumping `version` and writing a `load()` migration pass
+because there is nothing to migrate — old days are valid, just partial —
+and a read-time default is a smaller, safer diff than rewriting stored data
+that other code (or a future Issue) doesn't otherwise need touched.
+
+**Sorting lives in `state.js`, inside `getDay`.** `getDay` sorts
+`commitments` by `time` (ascending, string comparison) before returning,
+so every caller — render included — always sees commitments in schedule
+order without re-sorting at the call site. It's a pure function over plain
+data, so it's covered by the same Playwright suite as the rest of `state.js`
+without needing a DOM.
+
+**Distinguishing mark: a bordered time chip, not color.** Priorities use a
+numbered badge + solid left border (per the #12/#14 decisions); commitments
+reuse that pattern's shape but not its hue — a rectangular `HH:MM` chip in
+place of the numbered badge, and a *dashed* left border/panel-top border
+instead of priorities' solid one. The time text itself is the primary
+distinguishing content, per the Issue; the dashed border is a secondary,
+non-color echo of it so the panel and its items read as a group even in
+grayscale.
+
+**Three-panel layout: two columns, commitments spans both below.** Below
+640px, `.panels` stays a single-column stack (unchanged). At 640px and up,
+`.panels` becomes a 2-column CSS grid (`1fr 1fr`) holding Priorities and
+Tasks side by side, and `.commitments-panel` is pinned to
+`grid-column: 1 / -1` so it spans the full width on its own row underneath.
+This was chosen over a 3-up grid (e.g. `repeat(auto-fit, minmax(...))`)
+because the page's `max-width: 640px` container means three equal columns
+would never have room to sit on one row anyway; letting the third panel
+wrap via `auto-fit` produced an uneven half-empty row, where an explicit
+full-width row is deliberate and predictable at every width above 640px.
+At 360px all three panels stack full-width in source order (Priorities,
+Tasks, Commitments) with no layout change needed beyond what #12 already
+established.
