@@ -21,14 +21,15 @@ if [ -z "$dir" ]; then
   git clone -q --depth 1 "https://github.com/$(yq '.telemetry_repo' "$cfg").git" "$dir"
 fi
 
-today=$(date -u +%F)
+offset=$(yq '.day_utc_offset_hours // 0' "$cfg")
+today=$(date -u -d "$offset hours" +%F)
 # The budget week follows the subscription allowance, which resets on
 # Sunday 16:00 UTC (13:00 in Sao Paulo), not the calendar week.
 wk=$(date -u -d "sunday 16:00" +%s); [ "$wk" -le "$(date -u +%s)" ] || wk=$((wk - 604800))
 since=$(date -u -d "@$wk" +%FT%TZ)
 
 sum=$(cat "$dir"/runs/"$SPECIMEN"/*/events/*.jsonl 2>/dev/null \
-  | jq -s -c -L "$here" --arg t "$today" --arg s "$since" --argjson b "$budget" --arg n "$(yq '.run' "$cfg")" 'include "ledger"; summary($t; $s; $b; $n)')
+  | jq -s -c -L "$here" --arg t "$today" --arg s "$since" --argjson b "$budget" --arg n "$(yq '.run' "$cfg")" --argjson o "$offset" 'include "ledger"; summary($t; $s; $b; $n; $o)')
 runs=$(jq -r --arg r "$role" '.today[$r + "_runs"]' <<<"$sum")
 tokens=$(jq -r '.week.tokens' <<<"$sum")
 cost=$(jq -r '.week.cost_usd' <<<"$sum")
