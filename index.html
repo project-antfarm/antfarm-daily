@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Today — Daily Planner</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="day-header">
+        <p class="day-label">Today</p>
+        <h1 id="today-date"></h1>
+      </header>
+
+      <main>
+        <section class="panel priorities" aria-labelledby="priorities-heading">
+          <div class="panel-head">
+            <h2 id="priorities-heading">Top priorities</h2>
+            <span class="panel-hint" id="priorities-count"></span>
+          </div>
+          <ul class="item-list" id="priority-list"></ul>
+          <form id="priority-form" class="add-form">
+            <label for="priority-input" class="visually-hidden">Add a priority</label>
+            <input id="priority-input" type="text" placeholder="Add a priority…" autocomplete="off" />
+            <button type="submit">Add</button>
+          </form>
+          <p class="form-note" id="priority-limit-note" hidden>
+            You've reached the limit of 3 priorities for today. Remove one to add another.
+          </p>
+        </section>
+
+        <section class="panel tasks" aria-labelledby="tasks-heading">
+          <div class="panel-head">
+            <h2 id="tasks-heading">Tasks</h2>
+          </div>
+          <ul class="item-list" id="task-list"></ul>
+          <form id="task-form" class="add-form">
+            <label for="task-input" class="visually-hidden">Add a task</label>
+            <input id="task-input" type="text" placeholder="Add a task…" autocomplete="off" />
+            <button type="submit">Add</button>
+          </form>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
