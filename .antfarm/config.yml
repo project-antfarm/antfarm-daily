@@ -11,9 +11,10 @@ worker:
   model: claude-sonnet-5
   max_turns: 60
   runs_per_day: 3
-# Sum of all token kinds logged this week (Mon-Sun UTC) across every run of
-# this specimen. Hard stop for every role. Calibrate against Claude /usage.
-weekly_token_budget: 5000000
+# Sum of all token kinds (cache reads counted as full tokens) logged since the
+# last allowance reset, Sunday 16:00 UTC, across every run of this specimen.
+# Hard stop for every role. Calibrate against Claude /usage.
+weekly_token_budget: 8000000
 ready_max: 1
 attempts_max: 2
 lease_hours: 4

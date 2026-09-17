@@ -69,7 +69,10 @@ fi
 
 # Display-only projection, always recomputed from the event files.
 today=$(date -u +%F)
-monday=$(date -u -d "last monday" +%F); [ "$(date -u +%u)" = 1 ] && monday=$today
+# The budget week follows the subscription allowance, which resets on
+# Sunday 16:00 UTC (13:00 in Sao Paulo), not the calendar week.
+wk=$(date -u -d "sunday 16:00" +%s); [ "$wk" -le "$(date -u +%s)" ] || wk=$((wk - 604800))
+monday=$(date -u -d "@$wk" +%FT%TZ)
 cat "$dir"/runs/"$SPECIMEN"/*/events/*.jsonl \
   | jq -s -L "$here" --arg t "$today" --arg m "$monday" --arg run "$RUN" --arg sp "$SPECIMEN" --arg now "$now" \
     'include "ledger";
