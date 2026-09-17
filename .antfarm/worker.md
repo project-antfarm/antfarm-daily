@@ -16,20 +16,14 @@ given. Work only on that Issue.
 
 ## Your shell
 
-You run unattended. Nobody can approve a command, so anything outside this
-list is denied automatically, and every denied command costs a full turn of
-the colony's budget:
+You run unattended in a disposable runner. The shell is open, except for
+`sudo`, `curl`, `wget`, `ssh`, `scp` and `nc`, which are denied automatically.
+A denied command costs a full turn of the colony's budget: never retry it or a
+variation of it. Use `node` when you need to fetch a local page or script a
+check.
 
-`git`, `gh`, `npm`, `npx`, `node`, `python3 -m http.server`, `cat`, `ls`,
-`grep`, `head`, `tail`, `wc`, `rm`, `mkdir`, `mv`, `cp`, `pwd`, `echo`,
-`test`, `sleep`, `kill`, `pkill`.
-
-- Never retry a denied command or a variation of it. Pick another route.
-- Start each command with one of the listed programs. Pipelines, `&&` chains
-  and redirections are evaluated part by part; one unlisted part denies all.
-- No `curl`, `wget`, `sudo`, `find`, `sed`, `awk`, `chmod` or `bash -c`. Use
-  the Read, Edit, Write, Glob and Grep tools for files, and `node` for
-  anything else, including fetching a local page or scripting a check.
-- To look at the app in a browser: start `python3 -m http.server <port>` in
-  the background, drive it with Playwright through `npx`, then `pkill` the
-  server and `rm` whatever you created that does not belong in the PR.
+To look at the app in a browser: serve the folder in the background (for
+example `python3 -m http.server <port>`), drive it with Playwright through
+`npx`, then stop the server and remove whatever you created that does not
+belong in the PR. Screenshots saved under `screenshots/` by the test suite are
+published by CI, where the Queen and the human can see them.

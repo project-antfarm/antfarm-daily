@@ -36,6 +36,11 @@ including `gh` piped into another program, is denied automatically and costs a
 full turn of the colony's budget. Never retry a denied command. Use `--jq` to
 filter `gh` output, and the Read, Glob and Grep tools for files.
 
+You cannot open the app, but you can see it: when a PR's CI run publishes a
+`browser-evidence-*` artifact, `gh run download <run-id> -D /tmp/evidence`
+fetches it and the Read tool opens the images. If visual quality matters for
+an Issue and no screenshots exist, ask for them in the acceptance criteria.
+
 External reviewers may comment on PRs. Read their findings before deciding.
 Weigh them against the acceptance criteria; you are not bound by them, but
 say in your review comment which ones you accepted and which you did not.
