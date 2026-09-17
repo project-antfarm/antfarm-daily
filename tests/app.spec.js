@@ -7,6 +7,14 @@ async function addItem(page, list, text) {
   await input.press('Enter');
 }
 
+async function addCommitment(page, text, time) {
+  if (time !== undefined) await page.locator('#commitment-time-input').fill(time);
+  const input = page.locator('#commitment-input');
+  await input.focus();
+  await input.fill(text);
+  await input.press('Enter');
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
@@ -291,4 +299,175 @@ test('captures screenshots of the week strip on a non-today day with work across
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: 'screenshots/week-strip-desktop-1280.png' });
+});
+
+test('adds a commitment with its time visible, surviving a reload', async ({ page }) => {
+  await addCommitment(page, 'Standup', '09:30');
+  await expect(page.locator('#commitments-list .item')).toHaveCount(1);
+  await expect(page.locator('#commitments-list .item-text')).toHaveText('Standup');
+  await expect(page.locator('#commitments-list .item-time')).toHaveText('09:30');
+
+  await page.reload();
+
+  await expect(page.locator('#commitments-list .item')).toHaveCount(1);
+  await expect(page.locator('#commitments-list .item-time')).toHaveText('09:30');
+});
+
+test('commitments render sorted by time regardless of add order', async ({ page }) => {
+  await addCommitment(page, 'Afternoon', '15:00');
+  await addCommitment(page, 'Morning', '09:00');
+  await addCommitment(page, 'Midday', '12:00');
+
+  await expect(page.locator('#commitments-list .item-time')).toHaveText(['09:00', '12:00', '15:00']);
+  await expect(page.locator('#commitments-list .item-text')).toHaveText(['Morning', 'Midday', 'Afternoon']);
+});
+
+test('a commitment can be completed, un-completed and deleted, each surviving a reload', async ({ page }) => {
+  await addCommitment(page, 'Dentist', '14:00');
+  const item = page.locator('#commitments-list .item').first();
+  const toggle = item.locator('.item-toggle');
+
+  await toggle.click();
+  await expect(item).toHaveClass(/is-complete/);
+  await page.reload();
+  await expect(page.locator('#commitments-list .item')).toHaveClass(/is-complete/);
+
+  await page.locator('#commitments-list .item-toggle').click();
+  await expect(page.locator('#commitments-list .item')).not.toHaveClass(/is-complete/);
+  await page.reload();
+  await expect(page.locator('#commitments-list .item')).not.toHaveClass(/is-complete/);
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#commitments-list .item-delete').click();
+  await expect(page.locator('#commitments-list .item')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('#commitments-list .item')).toHaveCount(0);
+});
+
+test('submitting a commitment with empty text, or text but no time, adds nothing and shows a message', async ({
+  page,
+}) => {
+  await page.locator('#commitment-input').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#commitments-list .item')).toHaveCount(0);
+  await expect(page.locator('#commitment-msg')).toBeVisible();
+
+  await addCommitment(page, 'No time set');
+  await expect(page.locator('#commitments-list .item')).toHaveCount(0);
+  await expect(page.locator('#commitment-msg')).toBeVisible();
+});
+
+test('commitments belong to the selected day', async ({ page }) => {
+  await addCommitment(page, 'Only on today', '10:00');
+  await page.locator('#prev-day').click();
+  await expect(page.locator('#commitments-list .item')).toHaveCount(0);
+
+  await page.locator('#next-day').click();
+  await expect(page.locator('#commitments-list .item')).toHaveCount(1);
+});
+
+test('a day with only a commitment carries the week strip has-work marker', async ({ page }) => {
+  const selectedBefore = page.locator('.week-day.is-selected');
+  await expect(selectedBefore).not.toHaveClass(/has-work/);
+
+  await addCommitment(page, 'Only a commitment', '08:00');
+
+  const selectedAfter = page.locator('.week-day.is-selected');
+  await expect(selectedAfter).toHaveClass(/has-work/);
+});
+
+test('a day stored by the previous version (no commitments key) still loads and accepts a new commitment', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const key = new Date().toISOString().slice(0, 10);
+    localStorage.setItem(
+      'antfarm.daily.v1',
+      JSON.stringify({
+        version: 1,
+        days: {
+          [key]: {
+            priorities: [{ id: 'p1', text: 'Old priority', completed: false }],
+            tasks: [{ id: 't1', text: 'Old task', completed: false }],
+          },
+        },
+      })
+    );
+  });
+
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e));
+  await page.reload();
+
+  await expect(page.locator('#priorities-list .item')).toHaveCount(1);
+  await expect(page.locator('#tasks-list .item')).toHaveCount(1);
+  await expect(page.locator('#commitments-list .item')).toHaveCount(0);
+  await expect(page.locator('#commitments-empty')).toBeVisible();
+  expect(errors).toHaveLength(0);
+
+  await addCommitment(page, 'Newly added', '11:00');
+  await expect(page.locator('#commitments-list .item')).toHaveCount(1);
+});
+
+test('the Commitments panel is fully keyboard-operable', async ({ page }) => {
+  await page.locator('#commitment-time-input').focus();
+  let outline = await page.locator('#commitment-time-input').evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.locator('#commitment-time-input').fill('13:15');
+
+  await page.locator('#commitment-input').focus();
+  outline = await page.locator('#commitment-input').evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.type('Team sync');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#commitments-list .item')).toHaveCount(1);
+
+  const toggle = page.locator('#commitments-list .item-toggle');
+  await expect(toggle).toHaveAccessibleName(/.+/);
+  await toggle.focus();
+  outline = await toggle.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#commitments-list .item')).toHaveClass(/is-complete/);
+
+  const del = page.locator('#commitments-list .item-delete');
+  await expect(del).toHaveAccessibleName(/.+/);
+  await del.focus();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#commitments-list .item')).toHaveCount(0);
+});
+
+test('completed commitments stay visible and are distinguishable by more than color', async ({ page }) => {
+  await addCommitment(page, 'Finish report', '16:00');
+  const item = page.locator('#commitments-list .item').first();
+  await item.locator('.item-toggle').click();
+
+  await expect(item).toBeVisible();
+  await expect(item).toHaveClass(/is-complete/);
+  await expect(item.locator('.item-text')).toHaveCSS('text-decoration-line', 'line-through');
+});
+
+test('no horizontal scroll at 360px with priorities, tasks and commitments populated', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await addItem(page, 'priority', 'A reasonably long priority to check wrapping behaves');
+  await addItem(page, 'task', 'Another moderately long task description to check wrapping');
+  await addCommitment(page, 'A rather long commitment title to check panel wrapping behaves', '09:00');
+  const fits = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  );
+  expect(fits).toBe(true);
+});
+
+test('captures screenshots of a day with priorities, tasks and two commitments', async ({ page }) => {
+  await addItem(page, 'priority', 'Ship the commitments panel');
+  await addItem(page, 'task', 'Review open issues');
+  await addCommitment(page, 'Standup', '09:30');
+  await addCommitment(page, 'Dentist', '14:00');
+
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.screenshot({ path: 'screenshots/commitments-mobile-360.png' });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: 'screenshots/commitments-desktop-1280.png' });
 });

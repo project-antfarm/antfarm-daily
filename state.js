@@ -2,7 +2,7 @@
 
 export const STORAGE_KEY = 'antfarm.daily.v1';
 export const MAX_PRIORITIES = 3;
-export const LISTS = ['priorities', 'tasks'];
+export const LISTS = ['priorities', 'tasks', 'commitments'];
 
 export function todayKey(date = new Date()) {
   const y = date.getFullYear();
@@ -38,19 +38,31 @@ export function weekKeys(key) {
 }
 
 export function dayHasWork(day) {
-  return day.priorities.length > 0 || day.tasks.length > 0;
+  return day.priorities.length > 0 || day.tasks.length > 0 || day.commitments.length > 0;
 }
 
 function emptyDay() {
-  return { priorities: [], tasks: [] };
+  return { priorities: [], tasks: [], commitments: [] };
 }
 
 function emptyState() {
   return { version: 1, days: {} };
 }
 
+function sortByTime(commitments) {
+  return [...commitments].sort((a, b) => a.time.localeCompare(b.time));
+}
+
+// Normalises a stored day to always carry every list, so older records
+// written before `commitments` existed don't hand callers `undefined`.
 export function getDay(state, key) {
-  return state.days[key] ?? emptyDay();
+  const day = state.days[key];
+  if (!day) return emptyDay();
+  return {
+    priorities: day.priorities ?? [],
+    tasks: day.tasks ?? [],
+    commitments: sortByTime(day.commitments ?? []),
+  };
 }
 
 export function load(storage = globalThis.localStorage) {
@@ -74,14 +86,16 @@ function withDay(state, key, day) {
 }
 
 // Returns { state, error } where error is null, 'empty' or 'limit'.
-export function addItem(state, key, list, text) {
+export function addItem(state, key, list, text, time) {
   const trimmed = text.trim();
   if (!trimmed) return { state, error: 'empty' };
+  if (list === 'commitments' && !time) return { state, error: 'empty' };
   const day = getDay(state, key);
   if (list === 'priorities' && day.priorities.length >= MAX_PRIORITIES) {
     return { state, error: 'limit' };
   }
   const item = { id: crypto.randomUUID(), text: trimmed, completed: false };
+  if (list === 'commitments') item.time = time;
   const nextDay = { ...day, [list]: [...day[list], item] };
   return { state: withDay(state, key, nextDay), error: null };
 }
