@@ -99,8 +99,8 @@ jobs:
         run: |
           curl -fsSL -o /tmp/rtk.tgz "https://github.com/rtk-ai/rtk/releases/download/${RTK_VERSION}/rtk-x86_64-unknown-linux-musl.tar.gz"
           echo "${RTK_SHA256}  /tmp/rtk.tgz" | sha256sum -c -
-          mkdir -p "$HOME/.local/bin" "$HOME/.config/rtk"
-          tar -xzf /tmp/rtk.tgz -C /tmp && install -m 755 "$(find /tmp -maxdepth 2 -type f -name rtk | head -1)" "$HOME/.local/bin/rtk"
+          mkdir -p "$HOME/.local/bin" "$HOME/.config/rtk" "$HOME/.claude" /tmp/rtk-x
+          tar -xzf /tmp/rtk.tgz -C /tmp/rtk-x && install -m 755 "$(find /tmp/rtk-x -type f -name rtk | head -1)" "$HOME/.local/bin/rtk"
           cp .antfarm/toolkit/rtk-config.toml "$HOME/.config/rtk/config.toml"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/rtk" --version
