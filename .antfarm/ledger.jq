@@ -17,9 +17,10 @@ def reported_cost: .usage.cost_usd // .cost_usd // 0;
 # Conservative estimate used by the guard. $b is the `budget` block of
 # config.yml. See the comment there.
 def cost($b):
-  ( out_tokens * $b.price_per_mtok.output
-  + in_tokens * (1 - $b.assumed_cache_share) * $b.price_per_mtok.input
-  + in_tokens * $b.assumed_cache_share * $b.price_per_mtok.cache_read ) / 1000000;
+  ($b.price_per_mtok[.actor.model // .model // "default"] // $b.price_per_mtok.default) as $p
+  | ( out_tokens * $p.output
+    + in_tokens * (1 - $b.assumed_cache_share) * $p.input
+    + in_tokens * $b.assumed_cache_share * $p.cache_read ) / 1000000;
 
 def cents: . * 100 | round / 100;
 

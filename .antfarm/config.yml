@@ -4,7 +4,7 @@
 run: run-001
 telemetry_repo: project-antfarm/antfarm-telemetry
 queen:
-  model: claude-sonnet-5
+  model: claude-opus-5
   max_turns: 30
   runs_per_day: 6
   # Seconds to wait before starting when woken by a finished CI run, so that
@@ -24,7 +24,12 @@ budget:
   # the full input price, whatever the run reported (typically about 95%).
   weekly_cost_usd: 30
   assumed_cache_share: 0.70
-  price_per_mtok: { input: 3, output: 15, cache_read: 0.30 }
+  # API list prices per million tokens, by model (cache read is 10% of input).
+  # An unknown model is priced as the most expensive one listed.
+  price_per_mtok:
+    claude-opus-5: { input: 5, output: 25, cache_read: 0.50 }
+    claude-sonnet-5: { input: 2, output: 10, cache_read: 0.20 }
+    default: { input: 5, output: 25, cache_read: 0.50 }
   # Lock 2: raw token count, every kind counted as a full token.
   weekly_tokens: 25000000
 ready_max: 1
