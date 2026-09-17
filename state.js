@@ -45,8 +45,12 @@ function emptyDay() {
   return { priorities: [], tasks: [], commitments: [] };
 }
 
+function emptyWeek() {
+  return { goals: [] };
+}
+
 function emptyState() {
-  return { version: 1, days: {} };
+  return { version: 1, days: {}, weeks: {} };
 }
 
 function sortByTime(commitments) {
@@ -63,6 +67,33 @@ export function getDay(state, key) {
     tasks: day.tasks ?? [],
     commitments: sortByTime(day.commitments ?? []),
   };
+}
+
+// Normalises a stored week to always carry `goals`, the same way `getDay`
+// covers records written before a key existed — including the common case
+// of a whole `weeks` map missing from state written before this feature.
+export function getWeek(state, key) {
+  const week = state.weeks?.[key];
+  if (!week) return emptyWeek();
+  return { goals: week.goals ?? [] };
+}
+
+// Sums completed/total across priorities, tasks and commitments over every
+// day of the week containing `dayKey`. Week goals are a separate list and
+// are not counted here.
+export function weekProgress(state, dayKey) {
+  let completed = 0;
+  let total = 0;
+  for (const key of weekKeys(dayKey)) {
+    const day = getDay(state, key);
+    for (const list of LISTS) {
+      for (const item of day[list]) {
+        total += 1;
+        if (item.completed) completed += 1;
+      }
+    }
+  }
+  return { completed, total };
 }
 
 export function load(storage = globalThis.localStorage) {
@@ -113,4 +144,39 @@ export function removeItem(state, key, list, id) {
   const day = getDay(state, key);
   const nextDay = { ...day, [list]: day[list].filter((item) => item.id !== id) };
   return withDay(state, key, nextDay);
+}
+
+function withWeek(state, key, week) {
+  return { ...state, weeks: { ...state.weeks, [key]: week } };
+}
+
+// Returns { state, error } where error is null or 'empty'. Dedicated
+// functions rather than generalising addItem/toggleItem/removeItem: those
+// key into `state.days` by day key with a fixed set of lists (and a
+// priorities limit), while goals key into `state.weeks` by week key with a
+// single list and no limit — sharing them would need a branch on which
+// top-level map and key to use for every call, which is more code than
+// three small week-scoped functions.
+export function addGoal(state, weekKey, text) {
+  const trimmed = text.trim();
+  if (!trimmed) return { state, error: 'empty' };
+  const week = getWeek(state, weekKey);
+  const item = { id: crypto.randomUUID(), text: trimmed, completed: false };
+  const nextWeek = { ...week, goals: [...week.goals, item] };
+  return { state: withWeek(state, weekKey, nextWeek), error: null };
+}
+
+export function toggleGoal(state, weekKey, id) {
+  const week = getWeek(state, weekKey);
+  const nextWeek = {
+    ...week,
+    goals: week.goals.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item)),
+  };
+  return withWeek(state, weekKey, nextWeek);
+}
+
+export function removeGoal(state, weekKey, id) {
+  const week = getWeek(state, weekKey);
+  const nextWeek = { ...week, goals: week.goals.filter((item) => item.id !== id) };
+  return withWeek(state, weekKey, nextWeek);
 }

@@ -8,8 +8,14 @@ import {
   parseKey,
   addDays,
   weekKeys,
+  weekStart,
+  weekProgress,
   dayHasWork,
   getDay,
+  getWeek,
+  addGoal,
+  toggleGoal,
+  removeGoal,
   MAX_PRIORITIES,
 } from './state.js';
 
@@ -42,6 +48,14 @@ const inputs = {
 const timeInput = document.getElementById('commitment-time-input');
 const limitMsg = document.getElementById('priority-limit-msg');
 const commitmentMsg = document.getElementById('commitment-msg');
+
+const weekProgressText = document.getElementById('week-progress-text');
+const weekProgressFill = document.getElementById('week-progress-fill');
+const weekGoalsList = document.getElementById('week-goals-list');
+const weekGoalsEmpty = document.getElementById('week-goals-empty');
+const goalForm = document.getElementById('goal-form');
+const goalInput = document.getElementById('goal-input');
+const goalMsg = document.getElementById('goal-msg');
 
 let state = load();
 
@@ -135,6 +149,72 @@ function renderItem(key, list, item, index) {
   return li;
 }
 
+function renderGoal(weekKey, item) {
+  const li = document.createElement('li');
+  li.className = 'item' + (item.completed ? ' is-complete' : '');
+  li.dataset.id = item.id;
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'item-toggle';
+  toggle.setAttribute('aria-pressed', String(item.completed));
+  toggle.addEventListener('click', () => {
+    state = toggleGoal(state, weekKey, item.id);
+    save(state);
+    render();
+  });
+
+  const check = document.createElement('span');
+  check.className = 'item-check';
+  check.setAttribute('aria-hidden', 'true');
+  check.textContent = item.completed ? '✓' : '';
+  toggle.appendChild(check);
+
+  const text = document.createElement('span');
+  text.className = 'item-text';
+  text.textContent = item.text;
+  toggle.appendChild(text);
+
+  const status = document.createElement('span');
+  status.className = 'sr-only';
+  status.textContent = item.completed ? ' (completed)' : ' (not completed)';
+  toggle.appendChild(status);
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'item-delete';
+  del.setAttribute('aria-label', `Delete "${item.text}"`);
+  del.textContent = '✕';
+  del.addEventListener('click', () => {
+    if (!window.confirm(`Delete "${item.text}"? This cannot be undone.`)) return;
+    state = removeGoal(state, weekKey, item.id);
+    save(state);
+    render();
+  });
+
+  li.append(toggle, del);
+  return li;
+}
+
+function progressLabel({ completed, total }) {
+  if (total === 0) return 'No planned work yet this week.';
+  return `${completed} of ${total} done this week`;
+}
+
+function renderWeekPanel(dayKey) {
+  const weekKey = weekStart(dayKey);
+  const week = getWeek(state, weekKey);
+
+  weekGoalsList.innerHTML = '';
+  weekGoalsEmpty.hidden = week.goals.length > 0;
+  week.goals.forEach((item) => weekGoalsList.appendChild(renderGoal(weekKey, item)));
+
+  const progress = weekProgress(state, dayKey);
+  weekProgressText.textContent = progressLabel(progress);
+  const percent = progress.total === 0 ? 0 : Math.round((progress.completed / progress.total) * 100);
+  weekProgressFill.style.width = `${percent}%`;
+}
+
 function renderWeekStrip(key) {
   const today = todayKey();
   weekStripEl.innerHTML = '';
@@ -198,8 +278,10 @@ function render() {
   limitMsg.hidden = !atLimit;
   inputs.priorities.disabled = atLimit;
   commitmentMsg.hidden = true;
+  goalMsg.hidden = true;
 
   renderWeekStrip(key);
+  renderWeekPanel(key);
 }
 
 function handleSubmit(list) {
@@ -229,6 +311,21 @@ function handleSubmit(list) {
 forms.priorities.addEventListener('submit', handleSubmit('priorities'));
 forms.tasks.addEventListener('submit', handleSubmit('tasks'));
 forms.commitments.addEventListener('submit', handleSubmit('commitments'));
+
+goalForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const weekKey = weekStart(activeDay());
+  const result = addGoal(state, weekKey, goalInput.value);
+  if (result.error === 'empty') {
+    goalMsg.hidden = false;
+    return;
+  }
+  state = result.state;
+  save(state);
+  goalInput.value = '';
+  render();
+  goalInput.focus();
+});
 
 prevBtn.addEventListener('click', () => selectDay(addDays(activeDay(), -1)));
 nextBtn.addEventListener('click', () => selectDay(addDays(activeDay(), 1)));
