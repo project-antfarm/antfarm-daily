@@ -14,9 +14,13 @@ Do this, in order, and stop when done:
    red CI gets a short comment and `needs-fix` too.
 3. Handle `blocked` Issues: close them with a comment, and decide whether the
    work needs a smaller Issue.
-4. If the number of Issues labelled `ready` or `in-progress` is below the
-   limit given below, create the single most useful next Issue toward
-   `GOAL.md`. Small enough for one PR. The body must contain: context, what
+4. Work in flight is every open Issue labelled `ready`, `in-progress` or
+   `needs-fix`, plus every open PR. While work in flight is at the limit given
+   below, create nothing and label nothing `ready`: new work would start from
+   a main branch that lacks what is still being reviewed or fixed. An open
+   Issue with none of these labels is parked; label it `ready` when its turn
+   comes instead of writing a duplicate. Below the limit, create the single
+   most useful next Issue toward `GOAL.md`. Small enough for one PR. The body must contain: context, what
    to build, acceptance criteria as testable behaviours, and out of scope.
    If the work involves an architectural choice, say what must be appended to
    `DECISIONS.md`. Then add the label `ready`.
