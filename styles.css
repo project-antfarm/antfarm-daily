@@ -1,0 +1,271 @@
+:root {
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --text: #23211c;
+  --muted: #6f6a5e;
+  --border: #ddd8cd;
+  --accent: #a3410a;
+  --accent-text: #8a3608;
+  --focus: #1d4ed8;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-width: 0;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: clamp(16px, 5vw, 40px) clamp(16px, 5vw, 24px) 64px;
+}
+
+.day-header {
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.day-header h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.panels {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.priorities-panel {
+  border-top: 4px solid var(--accent);
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.panel-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.item-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty-state {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.item {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.priorities-list .item {
+  border-left: 4px solid var(--accent);
+}
+
+.item-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.item-toggle:hover {
+  background: var(--bg);
+}
+
+.item-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.item-check {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--muted);
+  border-radius: 5px;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.item.is-complete .item-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.item-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.item.is-complete .item-text {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  color: var(--muted);
+}
+
+.item-delete {
+  flex-shrink: 0;
+  width: 40px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.item-delete:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.add-form {
+  display: flex;
+  gap: 8px;
+}
+
+.add-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.add-form input:disabled {
+  opacity: 0.6;
+}
+
+.add-form button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add-form button:hover {
+  background: var(--accent-text);
+}
+
+.form-msg {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (min-width: 640px) {
+  .panels {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .panel {
+    flex: 1;
+    min-width: 0;
+  }
+}

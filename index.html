@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today — A.N.T.F.A.R.M. Daily</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="page">
+  <header class="day-header">
+    <p class="eyebrow">Today</p>
+    <h1 id="today-date"></h1>
+  </header>
+
+  <main class="panels">
+    <section class="panel priorities-panel" aria-labelledby="priorities-heading">
+      <div class="panel-head">
+        <h2 id="priorities-heading">Priorities</h2>
+        <span class="panel-hint">Up to 3</span>
+      </div>
+      <ul id="priorities-list" class="item-list priorities-list"></ul>
+      <p id="priorities-empty" class="empty-state">No priorities yet — what matters most today?</p>
+      <form id="priority-form" class="add-form">
+        <label class="sr-only" for="priority-input">Add a priority</label>
+        <input id="priority-input" type="text" placeholder="Add a priority…" autocomplete="off" maxlength="140">
+        <button type="submit">Add</button>
+      </form>
+      <p id="priority-limit-msg" class="form-msg" role="status" hidden>
+        You already have 3 priorities today. Complete or remove one first.
+      </p>
+    </section>
+
+    <section class="panel tasks-panel" aria-labelledby="tasks-heading">
+      <div class="panel-head">
+        <h2 id="tasks-heading">Tasks</h2>
+      </div>
+      <ul id="tasks-list" class="item-list tasks-list"></ul>
+      <p id="tasks-empty" class="empty-state">No tasks yet — add whatever else needs doing.</p>
+      <form id="task-form" class="add-form">
+        <label class="sr-only" for="task-input">Add a task</label>
+        <input id="task-input" type="text" placeholder="Add a task…" autocomplete="off" maxlength="140">
+        <button type="submit">Add</button>
+      </form>
+    </section>
+  </main>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
