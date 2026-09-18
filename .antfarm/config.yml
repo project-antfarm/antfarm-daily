@@ -6,14 +6,14 @@ telemetry_repo: project-antfarm/antfarm-telemetry
 queen:
   model: claude-opus-5
   max_turns: 30
-  runs_per_day: 6
+  runs_per_day: 10
   # When woken by a finished CI run, wait until the external reviewer has
   # reviewed that commit, polling every 20s, for at most this many seconds.
   review_wait_max_seconds: 600
 worker:
   model: claude-sonnet-5
   max_turns: 60
-  runs_per_day: 6
+  runs_per_day: 10
 # Weekly budget, counted since the last allowance reset (Sunday 16:00 UTC)
 # across every run of this specimen. Two locks; either one stops every role.
 budget:
@@ -22,7 +22,7 @@ budget:
   # deliberately distrusts the cache: it assumes only `assumed_cache_share` of
   # the non-output tokens were billed at the cache-read price and the rest at
   # the full input price, whatever the run reported (typically about 95%).
-  weekly_cost_usd: 54
+  weekly_cost_usd: 85
   assumed_cache_share: 0.70
   # API list prices per million tokens, by model (cache read is 10% of input).
   # An unknown model is priced as the most expensive one listed.
@@ -31,7 +31,7 @@ budget:
     claude-sonnet-5: { input: 2, output: 10, cache_read: 0.20 }
     default: { input: 5, output: 25, cache_read: 0.50 }
   # Lock 2: raw token count, every kind counted as a full token.
-  weekly_tokens: 45000000
+  weekly_tokens: 70000000
 # The colony's day, for the runs_per_day limits, follows the human's clock:
 # Sao Paulo, UTC-3 all year. Telemetry timestamps stay in UTC.
 day_utc_offset_hours: -3

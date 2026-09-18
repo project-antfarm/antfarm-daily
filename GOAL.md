@@ -109,6 +109,11 @@ A user opening it in the morning should be able to quickly answer:
 Common planning actions should be understandable without documentation and
 should require little interaction.
 
+The interface is in Brazilian Portuguese. Every text a person sees or hears
+(labels, messages, empty states, dates, accessible names) is written in
+natural pt-BR, and dates and times follow Brazilian conventions. Code,
+commits, Issues and documentation stay in English.
+
 The application must work comfortably on both desktop and mobile devices,
 including a 360px-wide viewport without horizontal page scrolling.
 
@@ -233,6 +238,7 @@ At minimum:
 - data survives browser sessions;
 - the application works without backend infrastructure;
 - mobile and desktop experiences are usable;
+- the whole interface is in Brazilian Portuguese;
 - primary interactions are reasonably accessible;
 - all CI checks required on the main branch pass;
 - the application is deployed and reachable at its GitHub Pages URL;

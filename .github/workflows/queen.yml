@@ -4,9 +4,11 @@ on:
   workflow_run:
     workflows: [ci]
     types: [completed]
-  # Heartbeat, in case an event is missed.
+  # Heartbeat every 3 hours, off the top of the hour where GitHub delays cron
+  # the most. It recovers the colony after a guard block or a missed event; the
+  # guard step ends it for free when a Worker is busy and nothing awaits review.
   schedule:
-    - cron: "0 9,15,21 * * *"
+    - cron: "17 */3 * * *"
   workflow_dispatch:
 concurrency:
   group: queen
@@ -51,6 +53,7 @@ jobs:
           ENABLED: ${{ vars.ANTFARM_ENABLED }}
           TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
           LEASE_HOURS: ${{ steps.cfg.outputs.lease_hours }}
+          EVENT: ${{ github.event_name }}
         run: |
           # block <reason> [log]: skip the model; "log" also records a guard.blocked event
           block() { echo "blocked: $1"; { echo "skip=true"; echo "reason=$1"; echo "log=${2:-}"; } >> "$GITHUB_OUTPUT"; exit 0; }
@@ -67,6 +70,14 @@ jobs:
               gh issue comment "$n" --body "Lease expired after ${age}h without a PR. Back to ready."
             fi
           done
+          # Heartbeat only: when a Worker is busy and nothing awaits review or
+          # rescue, there is nothing for the Queen to decide. End without a model.
+          if [ "$EVENT" = "schedule" ]; then
+            flight=$(gh issue list --state open --limit 200 --json labels --jq '[.[] | select([.labels[].name] | any(. == "ready" or . == "in-progress" or . == "needs-fix"))] | length')
+            prs=$(gh pr list --state open --limit 200 --json headRefName --jq '[.[] | select(.headRefName | startswith("ant/"))] | length')
+            stuck=$(gh issue list --state open --label blocked --json number --jq length)
+            if [ "$flight" != 0 ] && [ "$prs" = 0 ] && [ "$stuck" = 0 ]; then block worker_busy; fi
+          fi
       - name: wait for the external review of this commit
         if: steps.guard.outputs.skip != 'true' && github.event_name == 'workflow_run'
         env:
