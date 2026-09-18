@@ -22,6 +22,8 @@ import {
   removeDeadline,
   deadlineLabel,
   approachingSummary,
+  unfinishedBefore,
+  moveItem,
   MAX_PRIORITIES,
 } from './state.js';
 
@@ -63,6 +65,10 @@ const goalForm = document.getElementById('goal-form');
 const goalInput = document.getElementById('goal-input');
 const goalMsg = document.getElementById('goal-msg');
 const weekHeading = document.getElementById('week-heading');
+
+const unfinishedList = document.getElementById('unfinished-list');
+const unfinishedSummaryEl = document.getElementById('unfinished-summary');
+const unfinishedMsg = document.getElementById('unfinished-msg');
 
 const deadlinesList = document.getElementById('deadlines-list');
 const deadlinesEmpty = document.getElementById('deadlines-empty');
@@ -280,6 +286,80 @@ function renderDeadline(item, today) {
   return li;
 }
 
+// Textual origin label — never conveyed by color or position alone. "Yesterday"
+// relative to the selected day (not the real today), since the panel itself
+// is scoped to the selected day.
+function originLabel(originKey, selectedKey) {
+  if (originKey === addDays(selectedKey, -1)) return 'Yesterday';
+  return parseKey(originKey).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function unfinishedSummaryText(count) {
+  if (count === 0) return "Nothing unfinished — you're all caught up.";
+  return `${count} unfinished ${count === 1 ? 'item' : 'items'} from earlier days.`;
+}
+
+function renderUnfinishedRow(entry, selectedKey) {
+  const li = document.createElement('li');
+  li.className = 'unfinished-row';
+  li.dataset.id = entry.item.id;
+
+  const info = document.createElement('div');
+  info.className = 'unfinished-info';
+
+  const text = document.createElement('span');
+  text.className = 'item-text';
+  text.textContent = entry.item.text;
+  info.appendChild(text);
+
+  const origin = document.createElement('span');
+  origin.className = 'unfinished-origin';
+  origin.textContent = originLabel(entry.dayKey, selectedKey);
+  info.appendChild(origin);
+
+  const actions = document.createElement('div');
+  actions.className = 'unfinished-actions';
+
+  const completeBtn = document.createElement('button');
+  completeBtn.type = 'button';
+  completeBtn.className = 'unfinished-btn unfinished-complete';
+  completeBtn.textContent = 'Complete';
+  completeBtn.setAttribute('aria-label', `Complete "${entry.item.text}" from ${origin.textContent}`);
+  completeBtn.addEventListener('click', () => {
+    state = toggleItem(state, entry.dayKey, entry.list, entry.item.id);
+    save(state);
+    render();
+  });
+
+  const moveBtn = document.createElement('button');
+  moveBtn.type = 'button';
+  moveBtn.className = 'unfinished-btn unfinished-move';
+  moveBtn.textContent = 'Move to this day';
+  moveBtn.setAttribute('aria-label', `Move "${entry.item.text}" from ${origin.textContent} to this day`);
+  moveBtn.addEventListener('click', () => {
+    unfinishedMsg.hidden = true;
+    const result = moveItem(state, entry.dayKey, entry.list, entry.item.id, selectedKey);
+    if (result.error === 'limit') {
+      unfinishedMsg.hidden = false;
+      return;
+    }
+    state = result.state;
+    save(state);
+    render();
+  });
+
+  actions.append(completeBtn, moveBtn);
+  li.append(info, actions);
+  return li;
+}
+
+function renderUnfinishedPanel(dayKey) {
+  const entries = unfinishedBefore(state, dayKey);
+  unfinishedList.innerHTML = '';
+  entries.forEach((entry) => unfinishedList.appendChild(renderUnfinishedRow(entry, dayKey)));
+  unfinishedSummaryEl.textContent = unfinishedSummaryText(entries.length);
+}
+
 function progressLabel({ completed, total }) {
   if (total === 0) return 'No planned work yet this week.';
   return `${completed} of ${total} done this week`;
@@ -382,8 +462,10 @@ function render() {
   commitmentMsg.hidden = true;
   goalMsg.hidden = true;
   deadlineMsg.hidden = true;
+  unfinishedMsg.hidden = true;
 
   renderWeekStrip(key);
+  renderUnfinishedPanel(key);
   renderWeekPanel(key);
   renderDeadlinesPanel();
 }
