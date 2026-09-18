@@ -331,13 +331,14 @@ body {
 
 .add-form {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   flex-wrap: wrap;
 }
 
 .add-form input {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 160px;
+  min-width: 160px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -348,7 +349,7 @@ body {
 
 .commitment-form-fields {
   display: flex;
-  flex: 1;
+  flex: 1 1 260px;
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
@@ -356,6 +357,7 @@ body {
 
 .commitment-form-fields input[type='time'] {
   flex: 0 1 130px;
+  min-width: 0;
 }
 
 .commitment-form-fields input[type='text'] {
@@ -537,7 +539,7 @@ body {
 
 .deadline-form-fields {
   display: flex;
-  flex: 1;
+  flex: 1 1 260px;
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
@@ -545,6 +547,7 @@ body {
 
 .deadline-form-fields input[type='date'] {
   flex: 0 1 160px;
+  min-width: 0;
 }
 
 .deadline-form-fields input[type='text'] {

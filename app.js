@@ -445,7 +445,7 @@ function render() {
   const key = activeDay();
   const isToday = key === todayKey();
 
-  eyebrow.textContent = isToday ? 'Hoje' : 'Vendo';
+  eyebrow.textContent = isToday ? 'Hoje' : 'Visualizando';
   dateHeading.textContent = formatDate(key);
 
   const day = getDay(state, key);
