@@ -291,10 +291,12 @@ function daysBetween(fromKey, toKey) {
 // date in a second place.
 export function deadlineLabel(due, todayKeyValue) {
   const diff = daysBetween(todayKeyValue, due);
-  if (diff < 0) return 'Overdue';
-  if (diff === 0) return 'Due today';
-  if (diff === 1) return 'Due tomorrow';
-  if (diff <= APPROACHING_DAYS) return `Due in ${diff} days`;
+  if (diff < 0) return 'Atrasado';
+  if (diff === 0) return 'Vence hoje';
+  if (diff === 1) return 'Vence amanhã';
+  // diff is always >= 2 here (0 and 1 are handled above), so "dias" is
+  // always plural — no singular branch needed.
+  if (diff <= APPROACHING_DAYS) return `Vence em ${diff} dias`;
   return '';
 }
 
@@ -302,15 +304,17 @@ export function deadlineLabel(due, todayKeyValue) {
 // the whole list. Completed deadlines are excluded from both counts, so
 // finishing something already late removes it from "overdue".
 export function approachingSummary(deadlines, todayKeyValue) {
-  if (deadlines.length === 0) return 'No deadlines yet.';
+  if (deadlines.length === 0) return 'Nenhum prazo ainda.';
   const active = deadlines.filter((item) => !item.completed);
   const overdue = active.filter((item) => item.due < todayKeyValue).length;
   const dueSoon = active.filter(
     (item) => item.due >= todayKeyValue && daysBetween(todayKeyValue, item.due) <= APPROACHING_DAYS
   ).length;
-  if (overdue === 0 && dueSoon === 0) return 'Nothing due soon.';
+  if (overdue === 0 && dueSoon === 0) return 'Nada vencendo em breve.';
   const parts = [];
-  if (overdue > 0) parts.push(`${overdue} overdue`);
-  if (dueSoon > 0) parts.push(`${dueSoon} due soon`);
+  if (overdue > 0) parts.push(`${overdue} ${overdue === 1 ? 'atrasado' : 'atrasados'}`);
+  // "vencendo em breve" is a gerund phrase and doesn't inflect for number,
+  // so it needs no singular/plural branch.
+  if (dueSoon > 0) parts.push(`${dueSoon} vencendo em breve`);
   return `${parts.join(', ')}.`;
 }
