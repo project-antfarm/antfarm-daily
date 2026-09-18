@@ -210,9 +210,11 @@ test('captures screenshots of a populated day at mobile and desktop widths', asy
   await page.locator('#tasks-list .item').first().locator('.item-toggle').click();
 
   await page.setViewportSize({ width: 360, height: 800 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/mobile-360.png' });
 
   await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/desktop-1280.png' });
 });
 
@@ -222,7 +224,7 @@ test('previous day shows the prior date with its own empty lists', async ({ page
 
   await page.locator('#prev-day').click();
 
-  await expect(page.locator('#day-eyebrow')).toHaveText('Vendo');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Visualizando');
   await expect(page.locator('#today-date')).not.toHaveText(today);
   await expect(page.locator('#priorities-empty')).toBeVisible();
   await expect(page.locator('#tasks-empty')).toBeVisible();
@@ -230,7 +232,7 @@ test('previous day shows the prior date with its own empty lists', async ({ page
 
 test('the Today control returns to the current date from a non-today day', async ({ page }) => {
   await page.locator('#prev-day').click();
-  await expect(page.locator('#day-eyebrow')).toHaveText('Vendo');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Visualizando');
 
   await page.locator('#today-btn').click();
 
@@ -320,7 +322,7 @@ test('day navigation and the week strip are fully keyboard-operable', async ({ p
   let outline = await page.locator('#prev-day').evaluate((el) => getComputedStyle(el).outlineStyle);
   expect(outline).not.toBe('none');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#day-eyebrow')).toHaveText('Vendo');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Visualizando');
 
   await page.locator('#today-btn').focus();
   outline = await page.locator('#today-btn').evaluate((el) => getComputedStyle(el).outlineStyle);
@@ -452,12 +454,18 @@ test('captures screenshots of the week strip on a non-today day with work across
   await page.locator('#prev-day').click();
   await addItem(page, 'task', 'Two days ago task');
 
-  await expect(page.locator('#day-eyebrow')).toHaveText('Vendo');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Visualizando');
 
   await page.setViewportSize({ width: 360, height: 800 });
+  const fits = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  );
+  expect(fits).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/week-strip-mobile-360.png' });
 
   await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/week-strip-desktop-1280.png' });
 });
 
@@ -628,9 +636,11 @@ test('captures screenshots of a day with priorities, tasks and two commitments',
   await addCommitment(page, 'Dentist', '14:00');
 
   await page.setViewportSize({ width: 360, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/commitments-mobile-360.png' });
 
   await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/commitments-desktop-1280.png' });
 });
 
@@ -1044,9 +1054,11 @@ test('captures screenshots of a populated day and an Upcoming panel with overdue
   await addDeadline(page, 'Upcoming conference talk', '2026-10-15');
 
   await page.setViewportSize({ width: 360, height: 1200 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/deadlines-mobile-360.png' });
 
   await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/deadlines-desktop-1280.png' });
 });
 
@@ -1061,9 +1073,11 @@ test('captures screenshots of a populated day and a week panel with partial prog
   await page.locator('#week-goals-list .item').first().locator('.item-toggle').click();
 
   await page.setViewportSize({ width: 360, height: 1100 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/week-panel-mobile-360.png' });
 
   await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/week-panel-desktop-1280.png' });
 });
 
@@ -1335,9 +1349,11 @@ test('captures screenshots of a populated day with a populated Unfinished panel'
   await page.locator('#today-btn').click();
 
   await page.setViewportSize({ width: 360, height: 1300 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/unfinished-mobile-360.png' });
 
   await page.setViewportSize({ width: 1280, height: 1100 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/unfinished-desktop-1280.png' });
 });
 
@@ -1360,8 +1376,10 @@ test('captures screenshots of a fully populated pt-BR interface at mobile and de
   await addDeadline(page, 'Conference talk', '2026-10-15');
 
   await page.setViewportSize({ width: 360, height: 1600 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/pt-br-mobile-360.png' });
 
   await page.setViewportSize({ width: 1280, height: 1200 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/pt-br-desktop-1280.png' });
 });

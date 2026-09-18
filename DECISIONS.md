@@ -501,3 +501,18 @@ that it actually catches a regression: temporarily reverting
 `#unfinished-heading` to `Unfinished` in `index.html` and rerunning the test
 made it fail on that exact word, then the revert was undone before
 committing — a guard that only ever passes proves nothing.
+
+## 2026-09-18 — `.add-form` gets a text-input floor and top alignment (Issue #22)
+
+**`.add-form` now sets `align-items: flex-start` and `.add-form input` gets
+`flex: 1 1 160px; min-width: 160px` instead of `flex: 1; min-width: 0`.**
+This is a convention change for every current and future `.add-form`, not a
+one-panel patch: `align-items: flex-start` stops a submit button from
+stretching to the height of a field group that wraps onto two lines (the
+Commitments bug), and the 160px input floor stops the shared text input from
+collapsing to make room for a wider button label (the pt-BR `Adicionar`
+truncation). Time/date pickers (`.commitment-form-fields input[type='time']`,
+`.deadline-form-fields input[type='time']`/`input[type='date']`) explicitly
+reset `min-width: 0` so they keep shrinking to their small fixed basis
+instead of inheriting the new floor. A future panel that reuses `.add-form`
+gets both behaviors for free without opting in.
