@@ -155,16 +155,16 @@ function renderItem(key, list, item, index) {
 
   const status = document.createElement('span');
   status.className = 'sr-only';
-  status.textContent = item.completed ? ' (completed)' : ' (not completed)';
+  status.textContent = item.completed ? ' (concluído)' : ' (não concluído)';
   toggle.appendChild(status);
 
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'item-delete';
-  del.setAttribute('aria-label', `Delete "${item.text}"`);
+  del.setAttribute('aria-label', `Excluir "${item.text}"`);
   del.textContent = '✕';
   del.addEventListener('click', () => {
-    if (!window.confirm(`Delete "${item.text}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Excluir "${item.text}"? Esta ação não pode ser desfeita.`)) return;
     state = removeItem(state, key, list, item.id);
     save(state);
     render();
@@ -202,16 +202,16 @@ function renderGoal(weekKey, item) {
 
   const status = document.createElement('span');
   status.className = 'sr-only';
-  status.textContent = item.completed ? ' (completed)' : ' (not completed)';
+  status.textContent = item.completed ? ' (concluído)' : ' (não concluído)';
   toggle.appendChild(status);
 
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'item-delete';
-  del.setAttribute('aria-label', `Delete "${item.text}"`);
+  del.setAttribute('aria-label', `Excluir "${item.text}"`);
   del.textContent = '✕';
   del.addEventListener('click', () => {
-    if (!window.confirm(`Delete "${item.text}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Excluir "${item.text}"? Esta ação não pode ser desfeita.`)) return;
     state = removeGoal(state, weekKey, item.id);
     save(state);
     render();
@@ -267,16 +267,16 @@ function renderDeadline(item, today) {
 
   const status = document.createElement('span');
   status.className = 'sr-only';
-  status.textContent = item.completed ? ' (completed)' : ' (not completed)';
+  status.textContent = item.completed ? ' (concluído)' : ' (não concluído)';
   toggle.appendChild(status);
 
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'item-delete';
-  del.setAttribute('aria-label', `Delete "${item.text}"`);
+  del.setAttribute('aria-label', `Excluir "${item.text}"`);
   del.textContent = '✕';
   del.addEventListener('click', () => {
-    if (!window.confirm(`Delete "${item.text}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Excluir "${item.text}"? Esta ação não pode ser desfeita.`)) return;
     state = removeDeadline(state, item.id);
     save(state);
     render();
@@ -290,13 +290,13 @@ function renderDeadline(item, today) {
 // relative to the selected day (not the real today), since the panel itself
 // is scoped to the selected day.
 function originLabel(originKey, selectedKey) {
-  if (originKey === addDays(selectedKey, -1)) return 'Yesterday';
+  if (originKey === addDays(selectedKey, -1)) return 'Ontem';
   return parseKey(originKey).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function unfinishedSummaryText(count) {
-  if (count === 0) return "Nothing unfinished — you're all caught up.";
-  return `${count} unfinished ${count === 1 ? 'item' : 'items'} from earlier days.`;
+  if (count === 0) return 'Nada pendente — você está em dia.';
+  return `${count} ${count === 1 ? 'item pendente' : 'itens pendentes'} de dias anteriores.`;
 }
 
 function renderUnfinishedRow(entry, selectedKey) {
@@ -323,8 +323,8 @@ function renderUnfinishedRow(entry, selectedKey) {
   const completeBtn = document.createElement('button');
   completeBtn.type = 'button';
   completeBtn.className = 'unfinished-btn unfinished-complete';
-  completeBtn.textContent = 'Complete';
-  completeBtn.setAttribute('aria-label', `Complete "${entry.item.text}" from ${origin.textContent}`);
+  completeBtn.textContent = 'Concluir';
+  completeBtn.setAttribute('aria-label', `Concluir "${entry.item.text}" de ${origin.textContent}`);
   completeBtn.addEventListener('click', () => {
     state = toggleItem(state, entry.dayKey, entry.list, entry.item.id);
     save(state);
@@ -334,8 +334,8 @@ function renderUnfinishedRow(entry, selectedKey) {
   const moveBtn = document.createElement('button');
   moveBtn.type = 'button';
   moveBtn.className = 'unfinished-btn unfinished-move';
-  moveBtn.textContent = 'Move to this day';
-  moveBtn.setAttribute('aria-label', `Move "${entry.item.text}" from ${origin.textContent} to this day`);
+  moveBtn.textContent = 'Trazer para este dia';
+  moveBtn.setAttribute('aria-label', `Trazer "${entry.item.text}" de ${origin.textContent} para este dia`);
   moveBtn.addEventListener('click', () => {
     unfinishedMsg.hidden = true;
     const result = moveItem(state, entry.dayKey, entry.list, entry.item.id, selectedKey);
@@ -361,14 +361,15 @@ function renderUnfinishedPanel(dayKey) {
 }
 
 function progressLabel({ completed, total }) {
-  if (total === 0) return 'No planned work yet this week.';
-  return `${completed} of ${total} done this week`;
+  if (total === 0) return 'Nenhum trabalho planejado ainda esta semana.';
+  const done = completed === 1 ? 'concluído' : 'concluídos';
+  return `${completed} de ${total} ${done} esta semana`;
 }
 
 function weekHeadingText(dayKey) {
   const weekKey = weekStart(dayKey);
-  if (weekKey === weekStart(todayKey())) return 'This Week';
-  return `Week of ${formatDueDate(weekKey)}`;
+  if (weekKey === weekStart(todayKey())) return 'Esta semana';
+  return `Semana de ${formatDueDate(weekKey)}`;
 }
 
 function renderWeekPanel(dayKey) {
@@ -430,8 +431,8 @@ function renderWeekStrip(key) {
     dot.setAttribute('aria-hidden', 'true');
 
     let label = date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-    if (isToday) label += ', today';
-    if (hasWork) label += ', has planned work';
+    if (isToday) label += ', hoje';
+    if (hasWork) label += ', com trabalho planejado';
     btn.setAttribute('aria-label', label);
 
     btn.append(letter, num, dot);
@@ -444,7 +445,7 @@ function render() {
   const key = activeDay();
   const isToday = key === todayKey();
 
-  eyebrow.textContent = isToday ? 'Today' : 'Viewing';
+  eyebrow.textContent = isToday ? 'Hoje' : 'Vendo';
   dateHeading.textContent = formatDate(key);
 
   const day = getDay(state, key);

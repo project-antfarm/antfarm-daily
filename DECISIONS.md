@@ -414,3 +414,22 @@ visibility check would keep passing if the string were accidentally left in
 English or mis-encoded; asserting the literal text is what actually pins the
 translation and catches UTF-8 mangling (`Ã§` for `ç`) as a failure instead of
 a silent pass.
+
+## 2026-09-18 — pt-BR translation, slice 2: runtime strings in `app.js`/`state.js` (Issue #27)
+
+**Plural rule for the counted strings.** Unfinished items and week progress
+inflect the noun/adjective that carries the count (`item pendente` /
+`itens pendentes`, `concluído` / `concluídos`) because Portuguese agreement
+requires it; deadline urgency's "due in N days" never needs a singular branch
+because `deadlineLabel` only reaches that string for `diff` between 2 and
+`APPROACHING_DAYS` — 0 and 1 are handled by "Vence hoje"/"Vence amanhã"
+first — so "dias" is always plural. `approachingSummary`'s "overdue" count
+inflects (`atrasado`/`atrasados`); its "due soon" count is the gerund phrase
+"vencendo em breve", which is grammatically invariant and needs no plural
+branch at all.
+
+**`', today'` / `', has planned work'` in the week-strip day button's
+aria-label became `', hoje'` / `', com trabalho planejado'`.** Not called out
+in Issue #27's literal list (a plain string concatenation, not part of the
+`toLocaleDateString` call slice 3 owns), found by grepping `app.js` for
+remaining English literals as the Issue instructed.

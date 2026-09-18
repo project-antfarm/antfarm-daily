@@ -121,17 +121,35 @@ test('toggles completion on and off, distinct beyond color', async ({ page }) =>
   await expect(item).toHaveClass(/is-complete/);
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(item.locator('.item-check')).toHaveText('✓');
+  await expect(item.locator('.sr-only')).toHaveText('(concluído)');
 
   await toggle.click();
   await expect(item).not.toHaveClass(/is-complete/);
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await expect(item.locator('.item-check')).toHaveText('');
+  await expect(item.locator('.sr-only')).toHaveText('(não concluído)');
+});
+
+test('toggling a priority updates its accessible status text between (não concluído) and (concluído)', async ({
+  page,
+}) => {
+  await addItem(page, 'priority', 'Ship the PR');
+  const item = page.locator('#priorities-list .item').first();
+
+  await expect(item.locator('.sr-only')).toHaveText('(não concluído)');
+  await item.locator('.item-toggle').click();
+  await expect(item.locator('.sr-only')).toHaveText('(concluído)');
 });
 
 test('deleting requires a confirm step; dismissing keeps the item', async ({ page }) => {
   await addItem(page, 'task', 'Temporary task');
 
-  page.once('dialog', (dialog) => dialog.dismiss());
+  await expect(page.locator('#tasks-list .item-delete')).toHaveAccessibleName('Excluir "Temporary task"');
+
+  page.once('dialog', (dialog) => {
+    expect(dialog.message()).toBe('Excluir "Temporary task"? Esta ação não pode ser desfeita.');
+    dialog.dismiss();
+  });
   await page.locator('#tasks-list .item-delete').click();
   await expect(page.locator('#tasks-list .item')).toHaveCount(1);
 
@@ -200,11 +218,11 @@ test('captures screenshots of a populated day at mobile and desktop widths', asy
 
 test('previous day shows the prior date with its own empty lists', async ({ page }) => {
   const today = await page.locator('#today-date').innerText();
-  await expect(page.locator('#day-eyebrow')).toHaveText('Today');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
 
   await page.locator('#prev-day').click();
 
-  await expect(page.locator('#day-eyebrow')).toHaveText('Viewing');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Vendo');
   await expect(page.locator('#today-date')).not.toHaveText(today);
   await expect(page.locator('#priorities-empty')).toBeVisible();
   await expect(page.locator('#tasks-empty')).toBeVisible();
@@ -212,11 +230,11 @@ test('previous day shows the prior date with its own empty lists', async ({ page
 
 test('the Today control returns to the current date from a non-today day', async ({ page }) => {
   await page.locator('#prev-day').click();
-  await expect(page.locator('#day-eyebrow')).toHaveText('Viewing');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Vendo');
 
   await page.locator('#today-btn').click();
 
-  await expect(page.locator('#day-eyebrow')).toHaveText('Today');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
 });
 
 test('items added on one day are absent on another and reappear on navigating back', async ({ page }) => {
@@ -268,7 +286,7 @@ test('reloading after navigating away returns to today, and the other day keeps 
 
   await page.reload();
 
-  await expect(page.locator('#day-eyebrow')).toHaveText('Today');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
   await expect(page.locator('#tasks-list .item')).toHaveCount(0);
 
   await page.locator('#prev-day').click();
@@ -302,13 +320,13 @@ test('day navigation and the week strip are fully keyboard-operable', async ({ p
   let outline = await page.locator('#prev-day').evaluate((el) => getComputedStyle(el).outlineStyle);
   expect(outline).not.toBe('none');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#day-eyebrow')).toHaveText('Viewing');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Vendo');
 
   await page.locator('#today-btn').focus();
   outline = await page.locator('#today-btn').evaluate((el) => getComputedStyle(el).outlineStyle);
   expect(outline).not.toBe('none');
   await page.keyboard.press('Space');
-  await expect(page.locator('#day-eyebrow')).toHaveText('Today');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
 
   const weekDay = page.locator('.week-day').first();
   await expect(weekDay).toHaveAccessibleName(/.+/);
@@ -325,7 +343,7 @@ test('a session that crosses midnight writes new items to the new day, not the s
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await expect(page.locator('#day-eyebrow')).toHaveText('Today');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
 
   await page.clock.setSystemTime(new Date('2026-09-18T00:02:00'));
   await addItem(page, 'task', 'Added after midnight');
@@ -352,7 +370,7 @@ test('captures screenshots of the week strip on a non-today day with work across
   await page.locator('#prev-day').click();
   await addItem(page, 'task', 'Two days ago task');
 
-  await expect(page.locator('#day-eyebrow')).toHaveText('Viewing');
+  await expect(page.locator('#day-eyebrow')).toHaveText('Vendo');
 
   await page.setViewportSize({ width: 360, height: 800 });
   await page.screenshot({ path: 'screenshots/week-strip-mobile-360.png' });
@@ -389,11 +407,13 @@ test('a commitment can be completed, un-completed and deleted, each surviving a 
 
   await toggle.click();
   await expect(item).toHaveClass(/is-complete/);
+  await expect(page.locator('#commitments-list .sr-only')).toHaveText('(concluído)');
   await page.reload();
   await expect(page.locator('#commitments-list .item')).toHaveClass(/is-complete/);
 
   await page.locator('#commitments-list .item-toggle').click();
   await expect(page.locator('#commitments-list .item')).not.toHaveClass(/is-complete/);
+  await expect(page.locator('#commitments-list .sr-only')).toHaveText('(não concluído)');
   await page.reload();
   await expect(page.locator('#commitments-list .item')).not.toHaveClass(/is-complete/);
 
@@ -598,7 +618,7 @@ test('week progress counts every list across the week and updates without a relo
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  await expect(page.locator('#week-progress-text')).toHaveText('No planned work yet this week.');
+  await expect(page.locator('#week-progress-text')).toHaveText('Nenhum trabalho planejado ainda esta semana.');
 
   await addItem(page, 'priority', 'Ship the feature');
   await addItem(page, 'task', 'Write the tests');
@@ -606,15 +626,15 @@ test('week progress counts every list across the week and updates without a relo
 
   await page.locator('#next-day').click(); // Thursday, same week
   await addItem(page, 'task', 'Second day task');
-  await expect(page.locator('#week-progress-text')).toHaveText('0 of 4 done this week');
+  await expect(page.locator('#week-progress-text')).toHaveText('0 de 4 concluídos esta semana');
 
   await page.locator('#tasks-list .item').first().locator('.item-toggle').click();
-  await expect(page.locator('#week-progress-text')).toHaveText('1 of 4 done this week');
+  await expect(page.locator('#week-progress-text')).toHaveText('1 de 4 concluído esta semana');
 
   await page.locator('#prev-day').click(); // back to Wednesday
-  await expect(page.locator('#week-progress-text')).toHaveText('1 of 4 done this week');
+  await expect(page.locator('#week-progress-text')).toHaveText('1 de 4 concluído esta semana');
   await page.locator('#priorities-list .item').first().locator('.item-toggle').click();
-  await expect(page.locator('#week-progress-text')).toHaveText('2 of 4 done this week');
+  await expect(page.locator('#week-progress-text')).toHaveText('2 de 4 concluídos esta semana');
 });
 
 test('a day stored by the previous version (no weeks key) still loads and accepts a new week goal', async ({
@@ -642,7 +662,7 @@ test('a day stored by the previous version (no weeks key) still loads and accept
 
   await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
   await expect(page.locator('#week-goals-empty')).toHaveText('Nenhuma meta ainda — o que você quer desta semana?');
-  await expect(page.locator('#week-progress-text')).toHaveText('0 of 2 done this week');
+  await expect(page.locator('#week-progress-text')).toHaveText('0 de 2 concluídos esta semana');
   expect(errors).toHaveLength(0);
 
   await addGoal(page, 'First goal after upgrade');
@@ -780,7 +800,7 @@ test('relative urgency labels are distinct text, readable without color', async 
   await addDeadline(page, 'Due in five days', '2026-09-22');
 
   const labels = page.locator('#deadlines-list .item-urgency');
-  await expect(labels).toHaveText(['Overdue', 'Due today', 'Due tomorrow', 'Due in 5 days']);
+  await expect(labels).toHaveText(['Atrasado', 'Vence hoje', 'Vence amanhã', 'Vence em 5 dias']);
 });
 
 test('a completed overdue deadline is not counted as overdue in the summary', async ({ page }) => {
@@ -790,17 +810,17 @@ test('a completed overdue deadline is not counted as overdue in the summary', as
   await page.reload();
 
   await addDeadline(page, 'Late but done', '2026-09-01');
-  await expect(page.locator('#deadlines-summary')).toContainText('1 overdue');
+  await expect(page.locator('#deadlines-summary')).toContainText('1 atrasado');
 
   await page.locator('#deadlines-list .item-toggle').click();
-  await expect(page.locator('#deadlines-summary')).not.toContainText('overdue');
+  await expect(page.locator('#deadlines-summary')).not.toContainText('atrasado');
 });
 
 test('the summary line reads sensibly with zero deadlines and updates without a reload', async ({ page }) => {
-  await expect(page.locator('#deadlines-summary')).toHaveText('No deadlines yet.');
+  await expect(page.locator('#deadlines-summary')).toHaveText('Nenhum prazo ainda.');
 
   await addDeadline(page, 'Something due', '2026-12-01');
-  await expect(page.locator('#deadlines-summary')).not.toHaveText('No deadlines yet.');
+  await expect(page.locator('#deadlines-summary')).not.toHaveText('Nenhum prazo ainda.');
   await expect(page.locator('#deadlines-summary')).not.toBeEmpty();
 
   await page.locator('#deadlines-list .item-toggle').click();
@@ -896,10 +916,10 @@ test('the week panel and the Upcoming panel are inside the main landmark; a non-
   await expect(page.locator('main .week-panel')).toHaveCount(1);
   await expect(page.locator('main .upcoming-panel')).toHaveCount(1);
 
-  await expect(page.locator('#week-heading')).toHaveText('This Week');
+  await expect(page.locator('#week-heading')).toHaveText('Esta semana');
 
   for (let i = 0; i < 7; i++) await page.locator('#prev-day').click();
-  await expect(page.locator('#week-heading')).not.toHaveText('This Week');
+  await expect(page.locator('#week-heading')).not.toHaveText('Esta semana');
   await expect(page.locator('#week-heading')).not.toBeEmpty();
 });
 
@@ -976,7 +996,7 @@ test('an incomplete item from a past day appears in the Unfinished panel with it
 
   await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(1);
   await expect(page.locator('#unfinished-list .item-text')).toHaveText('Unfinished from yesterday');
-  await expect(page.locator('#unfinished-list .unfinished-origin')).toHaveText('Yesterday');
+  await expect(page.locator('#unfinished-list .unfinished-origin')).toHaveText('Ontem');
 });
 
 test('priorities and tasks from past days appear in Unfinished; commitments and week goals do not', async ({
@@ -1093,17 +1113,23 @@ test('the Unfinished panel is scoped to the selected day, not just the real toda
   await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(1);
 });
 
-test('the Unfinished count reads sensibly at zero and updates without a reload', async ({ page }) => {
-  await expect(page.locator('#unfinished-summary')).toHaveText("Nothing unfinished — you're all caught up.");
+test('the Unfinished count reads sensibly at zero, at one, and at two, updating without a reload', async ({
+  page,
+}) => {
+  await expect(page.locator('#unfinished-summary')).toHaveText('Nada pendente — você está em dia.');
 
   await page.locator('#prev-day').click();
   await addItem(page, 'task', 'Needs doing');
+  await addItem(page, 'priority', 'Also needs doing');
   await page.locator('#today-btn').click();
 
-  await expect(page.locator('#unfinished-summary')).toHaveText('1 unfinished item from earlier days.');
+  await expect(page.locator('#unfinished-summary')).toHaveText('2 itens pendentes de dias anteriores.');
+
+  await page.locator('#unfinished-list .unfinished-complete').first().click();
+  await expect(page.locator('#unfinished-summary')).toHaveText('1 item pendente de dias anteriores.');
 
   await page.locator('#unfinished-list .unfinished-complete').click();
-  await expect(page.locator('#unfinished-summary')).toHaveText("Nothing unfinished — you're all caught up.");
+  await expect(page.locator('#unfinished-summary')).toHaveText('Nada pendente — você está em dia.');
 });
 
 test('state written by the previous version (days, weeks, deadlines but nothing Unfinished-specific) still loads without throwing', async ({
@@ -1126,7 +1152,7 @@ test('state written by the previous version (days, weeks, deadlines but nothing 
   page.on('pageerror', (e) => errors.push(e));
   await page.reload();
 
-  await expect(page.locator('#unfinished-summary')).toHaveText("Nothing unfinished — you're all caught up.");
+  await expect(page.locator('#unfinished-summary')).toHaveText('Nada pendente — você está em dia.');
   expect(errors).toHaveLength(0);
 });
 
@@ -1141,8 +1167,10 @@ test('the Unfinished panel is fully keyboard-operable with distinct accessible n
 
   const completeBtn = page.locator('#unfinished-list .unfinished-complete');
   const moveBtn = page.locator('#unfinished-list .unfinished-move');
-  await expect(completeBtn).toHaveAccessibleName(/Complete/);
-  await expect(moveBtn).toHaveAccessibleName(/Move/);
+  await expect(completeBtn).toHaveText('Concluir');
+  await expect(moveBtn).toHaveText('Trazer para este dia');
+  await expect(completeBtn).toHaveAccessibleName(/Concluir/);
+  await expect(moveBtn).toHaveAccessibleName(/Trazer/);
   expect(await completeBtn.getAttribute('aria-label')).not.toBe(await moveBtn.getAttribute('aria-label'));
 
   await completeBtn.focus();
@@ -1191,6 +1219,22 @@ test('no horizontal scroll at 360px with priorities, tasks, commitments, week go
   const box = await text.boundingBox();
   const lineHeight = await text.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
   expect(box.height).toBeLessThan(lineHeight * 6);
+
+  // "Trazer para este dia" is markedly longer than "Move to this day" — pins
+  // that the longer pt-BR label still renders in full rather than being
+  // clipped by its button.
+  const completeBtn = page.locator('#unfinished-list .unfinished-complete').first();
+  const moveBtn = page.locator('#unfinished-list .unfinished-move').first();
+  await expect(completeBtn).toBeVisible();
+  await expect(moveBtn).toBeVisible();
+  const completeClipped = await completeBtn.evaluate(
+    (el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight
+  );
+  const moveClipped = await moveBtn.evaluate(
+    (el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight
+  );
+  expect(completeClipped).toBe(false);
+  expect(moveClipped).toBe(false);
 });
 
 test('captures screenshots of a populated day with a populated Unfinished panel', async ({ page }) => {
