@@ -31,7 +31,7 @@ budget:
     claude-sonnet-5: { input: 2, output: 10, cache_read: 0.20 }
     default: { input: 5, output: 25, cache_read: 0.50 }
   # Lock 2: raw token count, every kind counted as a full token.
-  weekly_tokens: 70000000
+  weekly_tokens: 100000000
 # The colony's day, for the runs_per_day limits, follows the human's clock:
 # Sao Paulo, UTC-3 all year. Telemetry timestamps stay in UTC.
 day_utc_offset_hours: -3
