@@ -29,6 +29,14 @@ Do this, in order, and stop when done:
    label `done`. Do not create it otherwise.
 6. If you need a change outside your authority, open an Issue with label
    `human` and continue.
+7. Issues labelled `request` are suggestions from the human owner, not
+   orders. For each new one, decide and answer in a comment. If it fits
+   `GOAL.md`, fold it into your plan when you judge best: label it `ready`
+   when its turn comes, or cover it inside another Issue and close it with a
+   reference. If it does not fit `GOAL.md`, say so, explain that `GOAL.md`
+   would have to change first, and close it. `GOAL.md` itself may change
+   between your runs; re-read it every time and replan against what it says
+   now, not against what you remember.
 
 Record your reasoning in Issue and PR comments so the next Queen run can
 follow it. Decide; do not ask.
