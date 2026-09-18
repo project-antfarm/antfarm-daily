@@ -337,6 +337,88 @@ test('day navigation and the week strip are fully keyboard-operable', async ({ p
   await expect(page.locator('.week-day[aria-current="date"]')).toHaveCount(1);
 });
 
+// This whole block forces the Playwright browser context's own locale to
+// en-US, so a passing test here proves the pt-BR rendering comes from the
+// hard-coded 'pt-BR' locale argument, not from whatever locale happens to be
+// configured on the machine running the app.
+test.describe('pt-BR dates render regardless of the browser locale', () => {
+  test.use({ locale: 'en-US' });
+
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-09-18T09:00:00') }); // sexta-feira
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+  });
+
+  test('the date heading renders a natural pt-BR weekday and month, day before month', async ({ page }) => {
+    await expect(page.locator('#today-date')).toHaveText('sexta-feira, 18 de setembro de 2026');
+  });
+
+  test('a deadline due date is numeric dd/mm/aaaa, never mm/dd/aaaa', async ({ page }) => {
+    await addDeadline(page, 'Renew passport', '2026-03-05');
+    await expect(page.locator('#deadlines-list .item-due')).toHaveText('05/03/2026');
+  });
+
+  test('each week-strip button names the full pt-BR weekday and date; the seven weekday abbreviations are distinct', async ({
+    page,
+  }) => {
+    const labels = page.locator('.week-day-label');
+    await expect(labels).toHaveCount(7);
+    const texts = await labels.allTextContents();
+    expect(new Set(texts).size).toBe(7);
+
+    // Pins the accent that a mangled UTF-8 encoding would drop or replace.
+    const saturday = page.locator('.week-day').nth(5); // Monday-start week: Mon=0 ... Sat=5
+    await expect(saturday.locator('.week-day-label')).toHaveText('sáb.');
+    await expect(saturday).toHaveAccessibleName(/^sábado, 19 de setembro(?:,|$)/);
+
+    const friday = page.locator('.week-day.is-selected'); // today, Sep 18
+    await expect(friday).toHaveAccessibleName(/^sexta-feira, 18 de setembro, hoje/);
+  });
+
+  test('the origin label of an unfinished item from more than one day back is a pt-BR date', async ({ page }) => {
+    for (let i = 0; i < 3; i++) await page.locator('#prev-day').click(); // Tuesday, Sep 15
+    await addItem(page, 'task', 'From three days back');
+    await page.locator('#today-btn').click();
+
+    await expect(page.locator('#unfinished-list .unfinished-origin')).toHaveText('ter., 15 de set.');
+  });
+
+  test('a fully populated pt-BR day shows none of the interface\'s former English words', async ({ page }) => {
+    await page.locator('#prev-day').click();
+    await addItem(page, 'task', 'Leftover from before');
+    await page.locator('#today-btn').click();
+
+    await addItem(page, 'priority', 'Ship the pt-BR date formatting');
+    await addItem(page, 'task', 'Review the guard test');
+    await addCommitment(page, 'Standup', '09:00');
+    await addGoal(page, 'Close out slice 3');
+    await addDeadline(page, 'Renew certificate', '2026-09-01'); // overdue
+
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('pt-BR');
+
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    const englishWords = [
+      'Today',
+      'Tasks',
+      'Priorities',
+      'Commitments',
+      'Unfinished',
+      'Add',
+      'Delete',
+      'Week',
+      'Overdue',
+      'Yesterday',
+      'September',
+      'Friday',
+    ];
+    for (const word of englishWords) {
+      expect(bodyText).not.toMatch(new RegExp(`\\b${word}\\b`, 'i'));
+    }
+  });
+});
+
 test('a session that crosses midnight writes new items to the new day, not the stale one', async ({ page }) => {
   const before = new Date('2026-09-17T23:58:00');
   await page.clock.install({ time: before });
@@ -1215,6 +1297,12 @@ test('no horizontal scroll at 360px with priorities, tasks, commitments, week go
   );
   expect(fits).toBe(true);
 
+  await expect(page.locator('.week-day')).toHaveCount(7);
+  const weekStripFits = await page
+    .locator('#week-strip')
+    .evaluate((el) => el.scrollWidth <= el.clientWidth);
+  expect(weekStripFits).toBe(true);
+
   const text = page.locator('#unfinished-list .item-text', { hasText: 'left over from a previous day' });
   const box = await text.boundingBox();
   const lineHeight = await text.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
@@ -1251,4 +1339,29 @@ test('captures screenshots of a populated day with a populated Unfinished panel'
 
   await page.setViewportSize({ width: 1280, height: 1100 });
   await page.screenshot({ path: 'screenshots/unfinished-desktop-1280.png' });
+});
+
+test('captures screenshots of a fully populated pt-BR interface at mobile and desktop widths', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-18T09:00:00') }); // sexta-feira
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await page.locator('#prev-day').click();
+  await addItem(page, 'task', 'Carried over from yesterday');
+  await page.locator('#today-btn').click();
+
+  await addItem(page, 'priority', 'Ship the pt-BR date formatting');
+  await addItem(page, 'priority', 'Review the deadlines');
+  await addItem(page, 'task', 'Reply to emails');
+  await addCommitment(page, 'Daily standup', '09:00');
+  await addGoal(page, 'Close out slice 3');
+  await addDeadline(page, 'Renew certificate', '2026-09-01');
+  await addDeadline(page, 'Conference talk', '2026-10-15');
+
+  await page.setViewportSize({ width: 360, height: 1600 });
+  await page.screenshot({ path: 'screenshots/pt-br-mobile-360.png' });
+
+  await page.setViewportSize({ width: 1280, height: 1200 });
+  await page.screenshot({ path: 'screenshots/pt-br-desktop-1280.png' });
 });

@@ -100,7 +100,7 @@ function selectDay(dayKey) {
 }
 
 function formatDate(key) {
-  return parseKey(key).toLocaleDateString(undefined, {
+  return parseKey(key).toLocaleDateString('pt-BR', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -109,7 +109,7 @@ function formatDate(key) {
 }
 
 function formatDueDate(key) {
-  return parseKey(key).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return parseKey(key).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function renderItem(key, list, item, index) {
@@ -291,7 +291,7 @@ function renderDeadline(item, today) {
 // is scoped to the selected day.
 function originLabel(originKey, selectedKey) {
   if (originKey === addDays(selectedKey, -1)) return 'Ontem';
-  return parseKey(originKey).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return parseKey(originKey).toLocaleDateString('pt-BR', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function unfinishedSummaryText(count) {
@@ -419,7 +419,7 @@ function renderWeekStrip(key) {
     const letter = document.createElement('span');
     letter.className = 'week-day-label';
     letter.setAttribute('aria-hidden', 'true');
-    letter.textContent = date.toLocaleDateString(undefined, { weekday: 'narrow' });
+    letter.textContent = date.toLocaleDateString('pt-BR', { weekday: 'short' });
 
     const num = document.createElement('span');
     num.className = 'week-day-num';
@@ -430,7 +430,7 @@ function renderWeekStrip(key) {
     dot.className = 'week-day-dot';
     dot.setAttribute('aria-hidden', 'true');
 
-    let label = date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    let label = date.toLocaleDateString('pt-BR', { weekday: 'long', month: 'long', day: 'numeric' });
     if (isToday) label += ', hoje';
     if (hasWork) label += ', com trabalho planejado';
     btn.setAttribute('aria-label', label);
