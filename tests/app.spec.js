@@ -36,13 +36,56 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
+test('the page lang and title are pt-BR', async ({ page }) => {
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe('pt-BR');
+  await expect(page).toHaveTitle('Hoje — A.N.T.F.A.R.M. Diário');
+});
+
+test('panel headings and the priorities hint are in pt-BR', async ({ page }) => {
+  await expect(page.locator('#priorities-heading')).toHaveText('Prioridades');
+  await expect(page.locator('.panel-hint')).toHaveText('Até 3');
+  await expect(page.locator('#tasks-heading')).toHaveText('Tarefas');
+  await expect(page.locator('#commitments-heading')).toHaveText('Compromissos');
+  await expect(page.locator('#unfinished-heading')).toHaveText('Pendências');
+  await expect(page.locator('#week-goals-heading')).toHaveText('Metas');
+  await expect(page.locator('#upcoming-heading')).toHaveText('Próximos prazos');
+});
+
+test('every add form input and submit button exposes a pt-BR accessible name', async ({ page }) => {
+  await expect(page.locator('#priority-input')).toHaveAccessibleName('Adicionar uma prioridade');
+  await expect(page.locator('#task-input')).toHaveAccessibleName('Adicionar uma tarefa');
+  await expect(page.locator('#commitment-time-input')).toHaveAccessibleName('Horário do compromisso');
+  await expect(page.locator('#commitment-input')).toHaveAccessibleName('Adicionar um compromisso');
+  await expect(page.locator('#goal-input')).toHaveAccessibleName('Adicionar uma meta para a semana');
+  await expect(page.locator('#deadline-input')).toHaveAccessibleName('Adicionar um prazo');
+  await expect(page.locator('#deadline-due-input')).toHaveAccessibleName('Data de vencimento');
+
+  const addButtons = [
+    '#priority-form button[type="submit"]',
+    '#task-form button[type="submit"]',
+    '#commitment-form button[type="submit"]',
+    '#goal-form button[type="submit"]',
+    '#deadline-form button[type="submit"]',
+  ];
+  for (const selector of addButtons) {
+    await expect(page.locator(selector)).toHaveAccessibleName('Adicionar');
+  }
+});
+
+test('day navigation and the week strip expose non-empty pt-BR aria-labels', async ({ page }) => {
+  await expect(page.locator('#prev-day')).toHaveAccessibleName('Dia anterior');
+  await expect(page.locator('#today-btn')).toHaveAccessibleName('Hoje');
+  await expect(page.locator('#next-day')).toHaveAccessibleName('Próximo dia');
+  await expect(page.locator('#week-strip')).toHaveAccessibleName('Semana');
+});
+
 test('empty state shows a human-readable date with no console errors', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e));
   await page.reload();
   await expect(page.locator('#today-date')).not.toBeEmpty();
-  await expect(page.locator('#priorities-empty')).toBeVisible();
-  await expect(page.locator('#tasks-empty')).toBeVisible();
+  await expect(page.locator('#priorities-empty')).toHaveText('Nenhuma prioridade ainda — o que mais importa hoje?');
+  await expect(page.locator('#tasks-empty')).toHaveText('Nenhuma tarefa ainda — adicione o que mais precisa ser feito.');
   expect(errors).toHaveLength(0);
 });
 
@@ -62,7 +105,9 @@ test('a 4th priority is prevented with a visible message, not a silent drop or a
   await addItem(page, 'priority', 'Two');
   await addItem(page, 'priority', 'Three');
   await expect(page.locator('#priorities-list .item')).toHaveCount(3);
-  await expect(page.locator('#priority-limit-msg')).toBeVisible();
+  await expect(page.locator('#priority-limit-msg')).toHaveText(
+    'Você já tem 3 prioridades hoje. Conclua ou remova uma primeiro.'
+  );
   await expect(page.locator('#priority-input')).toBeDisabled();
   expect(errors).toHaveLength(0);
 });
@@ -365,11 +410,11 @@ test('submitting a commitment with empty text, or text but no time, adds nothing
   await page.locator('#commitment-input').focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#commitments-list .item')).toHaveCount(0);
-  await expect(page.locator('#commitment-msg')).toBeVisible();
+  await expect(page.locator('#commitment-msg')).toHaveText('Um compromisso precisa de um horário e uma descrição.');
 
   await addCommitment(page, 'No time set');
   await expect(page.locator('#commitments-list .item')).toHaveCount(0);
-  await expect(page.locator('#commitment-msg')).toBeVisible();
+  await expect(page.locator('#commitment-msg')).toHaveText('Um compromisso precisa de um horário e uma descrição.');
 });
 
 test('commitments belong to the selected day', async ({ page }) => {
@@ -417,7 +462,7 @@ test('a day stored by the previous version (no commitments key) still loads and 
   await expect(page.locator('#priorities-list .item')).toHaveCount(1);
   await expect(page.locator('#tasks-list .item')).toHaveCount(1);
   await expect(page.locator('#commitments-list .item')).toHaveCount(0);
-  await expect(page.locator('#commitments-empty')).toBeVisible();
+  await expect(page.locator('#commitments-empty')).toHaveText('Nenhum compromisso agendado ainda.');
   expect(errors).toHaveLength(0);
 
   await addCommitment(page, 'Newly added', '11:00');
@@ -524,7 +569,7 @@ test('submitting the goal form with empty text adds nothing and shows a message'
   await page.locator('#goal-input').focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
-  await expect(page.locator('#goal-msg')).toBeVisible();
+  await expect(page.locator('#goal-msg')).toHaveText('Uma meta precisa de algum texto.');
 });
 
 test('week goals belong to the week, not the day', async ({ page }) => {
@@ -596,7 +641,7 @@ test('a day stored by the previous version (no weeks key) still loads and accept
   await page.reload();
 
   await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
-  await expect(page.locator('#week-goals-empty')).toBeVisible();
+  await expect(page.locator('#week-goals-empty')).toHaveText('Nenhuma meta ainda — o que você quer desta semana?');
   await expect(page.locator('#week-progress-text')).toHaveText('0 of 2 done this week');
   expect(errors).toHaveLength(0);
 
@@ -707,12 +752,12 @@ test('submitting a deadline with empty text, or text but no due date, adds nothi
   await page.locator('#deadline-input').focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
-  await expect(page.locator('#deadline-msg')).toBeVisible();
+  await expect(page.locator('#deadline-msg')).toHaveText('Um prazo precisa de texto e uma data de vencimento válida.');
 
   await page.locator('#deadline-due-input').fill('');
   await addDeadline(page, 'No due date set');
   await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
-  await expect(page.locator('#deadline-msg')).toBeVisible();
+  await expect(page.locator('#deadline-msg')).toHaveText('Um prazo precisa de texto e uma data de vencimento válida.');
 });
 
 test('deadlines render sorted by due date regardless of add order', async ({ page }) => {
@@ -799,7 +844,7 @@ test('a day stored by the previous version (no deadlines key) still loads and ac
   await page.reload();
 
   await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
-  await expect(page.locator('#deadlines-empty')).toBeVisible();
+  await expect(page.locator('#deadlines-empty')).toHaveText('Nenhum prazo ainda — adicione algo com data de vencimento.');
   expect(errors).toHaveLength(0);
 
   await addDeadline(page, 'First deadline after upgrade', '2026-12-01');
@@ -997,7 +1042,9 @@ test('moving a priority into a day already at the limit is refused with a visibl
   await page.locator('#today-btn').click();
 
   await page.locator('#unfinished-list .unfinished-move').click();
-  await expect(page.locator('#unfinished-msg')).toBeVisible();
+  await expect(page.locator('#unfinished-msg')).toHaveText(
+    'Este dia já tem 3 prioridades. Conclua ou remova uma antes de mover outra para cá.'
+  );
   await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(1);
   await expect(page.locator('#priorities-list .item')).toHaveCount(3);
 });

@@ -1,93 +1,93 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Today — A.N.T.F.A.R.M. Daily</title>
+<title>Hoje — A.N.T.F.A.R.M. Diário</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 <div class="page">
   <header class="day-header">
     <div class="day-header-top">
-      <p class="eyebrow" id="day-eyebrow">Today</p>
+      <p class="eyebrow" id="day-eyebrow">Hoje</p>
       <div class="day-nav">
-        <button type="button" id="prev-day" class="day-nav-btn" aria-label="Previous day">‹</button>
-        <button type="button" id="today-btn" class="day-nav-btn day-nav-today">Today</button>
-        <button type="button" id="next-day" class="day-nav-btn" aria-label="Next day">›</button>
+        <button type="button" id="prev-day" class="day-nav-btn" aria-label="Dia anterior">‹</button>
+        <button type="button" id="today-btn" class="day-nav-btn day-nav-today">Hoje</button>
+        <button type="button" id="next-day" class="day-nav-btn" aria-label="Próximo dia">›</button>
       </div>
     </div>
     <h1 id="today-date"></h1>
-    <div class="week-strip" id="week-strip" role="group" aria-label="Week"></div>
+    <div class="week-strip" id="week-strip" role="group" aria-label="Semana"></div>
   </header>
 
   <main>
   <div class="panels">
     <section class="panel priorities-panel" aria-labelledby="priorities-heading">
       <div class="panel-head">
-        <h2 id="priorities-heading">Priorities</h2>
-        <span class="panel-hint">Up to 3</span>
+        <h2 id="priorities-heading">Prioridades</h2>
+        <span class="panel-hint">Até 3</span>
       </div>
       <ul id="priorities-list" class="item-list priorities-list"></ul>
-      <p id="priorities-empty" class="empty-state">No priorities yet — what matters most today?</p>
+      <p id="priorities-empty" class="empty-state">Nenhuma prioridade ainda — o que mais importa hoje?</p>
       <form id="priority-form" class="add-form">
-        <label class="sr-only" for="priority-input">Add a priority</label>
-        <input id="priority-input" type="text" placeholder="Add a priority…" autocomplete="off" maxlength="140">
-        <button type="submit">Add</button>
+        <label class="sr-only" for="priority-input">Adicionar uma prioridade</label>
+        <input id="priority-input" type="text" placeholder="Adicionar uma prioridade…" autocomplete="off" maxlength="140">
+        <button type="submit">Adicionar</button>
       </form>
       <p id="priority-limit-msg" class="form-msg" role="status" hidden>
-        You already have 3 priorities today. Complete or remove one first.
+        Você já tem 3 prioridades hoje. Conclua ou remova uma primeiro.
       </p>
     </section>
 
     <section class="panel tasks-panel" aria-labelledby="tasks-heading">
       <div class="panel-head">
-        <h2 id="tasks-heading">Tasks</h2>
+        <h2 id="tasks-heading">Tarefas</h2>
       </div>
       <ul id="tasks-list" class="item-list tasks-list"></ul>
-      <p id="tasks-empty" class="empty-state">No tasks yet — add whatever else needs doing.</p>
+      <p id="tasks-empty" class="empty-state">Nenhuma tarefa ainda — adicione o que mais precisa ser feito.</p>
       <form id="task-form" class="add-form">
-        <label class="sr-only" for="task-input">Add a task</label>
-        <input id="task-input" type="text" placeholder="Add a task…" autocomplete="off" maxlength="140">
-        <button type="submit">Add</button>
+        <label class="sr-only" for="task-input">Adicionar uma tarefa</label>
+        <input id="task-input" type="text" placeholder="Adicionar uma tarefa…" autocomplete="off" maxlength="140">
+        <button type="submit">Adicionar</button>
       </form>
     </section>
 
     <section class="panel commitments-panel" aria-labelledby="commitments-heading">
       <div class="panel-head">
-        <h2 id="commitments-heading">Commitments</h2>
+        <h2 id="commitments-heading">Compromissos</h2>
       </div>
       <ul id="commitments-list" class="item-list commitments-list"></ul>
-      <p id="commitments-empty" class="empty-state">No scheduled commitments yet.</p>
+      <p id="commitments-empty" class="empty-state">Nenhum compromisso agendado ainda.</p>
       <form id="commitment-form" class="add-form commitment-form">
         <div class="commitment-form-fields">
-          <label class="sr-only" for="commitment-time-input">Commitment time</label>
+          <label class="sr-only" for="commitment-time-input">Horário do compromisso</label>
           <input id="commitment-time-input" type="time">
-          <label class="sr-only" for="commitment-input">Add a commitment</label>
-          <input id="commitment-input" type="text" placeholder="Add a commitment…" autocomplete="off" maxlength="140">
+          <label class="sr-only" for="commitment-input">Adicionar um compromisso</label>
+          <input id="commitment-input" type="text" placeholder="Adicionar um compromisso…" autocomplete="off" maxlength="140">
         </div>
-        <button type="submit">Add</button>
+        <button type="submit">Adicionar</button>
       </form>
       <p id="commitment-msg" class="form-msg" role="status" hidden>
-        A commitment needs both a time and a description.
+        Um compromisso precisa de um horário e uma descrição.
       </p>
     </section>
   </div>
 
   <section class="panel unfinished-panel" aria-labelledby="unfinished-heading">
     <div class="panel-head">
-      <h2 id="unfinished-heading">Unfinished</h2>
+      <h2 id="unfinished-heading">Pendências</h2>
     </div>
     <p id="unfinished-summary" class="unfinished-summary" role="status"></p>
     <ul id="unfinished-list" class="item-list" aria-labelledby="unfinished-heading"></ul>
     <p id="unfinished-msg" class="form-msg" role="status" hidden>
-      This day already has 3 priorities. Complete or remove one before moving another here.
+      Este dia já tem 3 prioridades. Conclua ou remova uma antes de mover outra para cá.
     </p>
   </section>
 
   <section class="panel week-panel" aria-labelledby="week-heading">
     <div class="panel-head">
-      <h2 id="week-heading">This Week</h2>
+      <h2 id="week-heading">Esta semana</h2>
     </div>
 
     <div class="week-progress">
@@ -97,37 +97,37 @@
       </div>
     </div>
 
-    <h3 id="week-goals-heading" class="week-goals-heading">Goals</h3>
+    <h3 id="week-goals-heading" class="week-goals-heading">Metas</h3>
     <ul id="week-goals-list" class="item-list goals-list" aria-labelledby="week-goals-heading"></ul>
-    <p id="week-goals-empty" class="empty-state">No goals yet — what do you want from this week?</p>
+    <p id="week-goals-empty" class="empty-state">Nenhuma meta ainda — o que você quer desta semana?</p>
     <form id="goal-form" class="add-form">
-      <label class="sr-only" for="goal-input">Add a goal for the week</label>
-      <input id="goal-input" type="text" placeholder="Add a goal for the week…" autocomplete="off" maxlength="140">
-      <button type="submit">Add</button>
+      <label class="sr-only" for="goal-input">Adicionar uma meta para a semana</label>
+      <input id="goal-input" type="text" placeholder="Adicionar uma meta para a semana…" autocomplete="off" maxlength="140">
+      <button type="submit">Adicionar</button>
     </form>
     <p id="goal-msg" class="form-msg" role="status" hidden>
-      A goal needs some text.
+      Uma meta precisa de algum texto.
     </p>
   </section>
 
   <section class="panel upcoming-panel" aria-labelledby="upcoming-heading">
     <div class="panel-head">
-      <h2 id="upcoming-heading">Upcoming</h2>
+      <h2 id="upcoming-heading">Próximos prazos</h2>
     </div>
     <p id="deadlines-summary" class="deadlines-summary" role="status"></p>
     <ul id="deadlines-list" class="item-list deadlines-list" aria-labelledby="upcoming-heading"></ul>
-    <p id="deadlines-empty" class="empty-state">No deadlines yet — add something with a due date.</p>
+    <p id="deadlines-empty" class="empty-state">Nenhum prazo ainda — adicione algo com data de vencimento.</p>
     <form id="deadline-form" class="add-form deadline-form">
       <div class="deadline-form-fields">
-        <label class="sr-only" for="deadline-input">Add a deadline</label>
-        <input id="deadline-input" type="text" placeholder="Add a deadline…" autocomplete="off" maxlength="140">
-        <label class="sr-only" for="deadline-due-input">Due date</label>
+        <label class="sr-only" for="deadline-input">Adicionar um prazo</label>
+        <input id="deadline-input" type="text" placeholder="Adicionar um prazo…" autocomplete="off" maxlength="140">
+        <label class="sr-only" for="deadline-due-input">Data de vencimento</label>
         <input id="deadline-due-input" type="date">
       </div>
-      <button type="submit">Add</button>
+      <button type="submit">Adicionar</button>
     </form>
     <p id="deadline-msg" class="form-msg" role="status" hidden>
-      A deadline needs text and a valid due date.
+      Um prazo precisa de texto e uma data de vencimento válida.
     </p>
   </section>
   </main>
