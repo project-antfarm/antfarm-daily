@@ -629,6 +629,36 @@ test('no horizontal scroll at 360px with priorities, tasks and commitments popul
   expect(fits).toBe(true);
 });
 
+test('at 360px the Commitments submit button matches the Tasks button height, and the text input is not squeezed by it', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+
+  const commitmentButtonHeight = await page
+    .locator('#commitment-form button[type="submit"]')
+    .evaluate((el) => el.getBoundingClientRect().height);
+  const taskButtonHeight = await page
+    .locator('#task-form button[type="submit"]')
+    .evaluate((el) => el.getBoundingClientRect().height);
+  expect(Math.abs(commitmentButtonHeight - taskButtonHeight)).toBeLessThan(5);
+
+  // The field group must claim the full row before the button, like Tasks
+  // does, instead of sharing a row with the button and being squeezed.
+  const fieldsBottom = await page
+    .locator('.commitment-form-fields')
+    .evaluate((el) => el.getBoundingClientRect().bottom);
+  const buttonTop = await page
+    .locator('#commitment-form button[type="submit"]')
+    .evaluate((el) => el.getBoundingClientRect().top);
+  expect(buttonTop).toBeGreaterThanOrEqual(fieldsBottom);
+
+  const textInputWidth = await page
+    .locator('#commitment-input')
+    .evaluate((el) => el.getBoundingClientRect().width);
+  const fieldsWidth = await page
+    .locator('.commitment-form-fields')
+    .evaluate((el) => el.getBoundingClientRect().width);
+  expect(textInputWidth).toBeGreaterThanOrEqual(fieldsWidth - 1);
+});
+
 test('captures screenshots of a day with priorities, tasks and two commitments', async ({ page }) => {
   await addItem(page, 'priority', 'Ship the commitments panel');
   await addItem(page, 'task', 'Review open issues');
@@ -636,7 +666,10 @@ test('captures screenshots of a day with priorities, tasks and two commitments',
   await addCommitment(page, 'Dentist', '14:00');
 
   await page.setViewportSize({ width: 360, height: 900 });
-  await page.evaluate(() => window.scrollTo(0, 0));
+  // Scroll the Commitments panel into view rather than to the top: at this
+  // viewport height its add-form sits below the fold, so scrolling to the
+  // top would produce evidence that never actually shows the form.
+  await page.locator('.commitments-panel').scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'screenshots/commitments-mobile-360.png' });
 
   await page.setViewportSize({ width: 1280, height: 900 });

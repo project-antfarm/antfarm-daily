@@ -516,3 +516,14 @@ truncation). Time/date pickers (`.commitment-form-fields input[type='time']`,
 reset `min-width: 0` so they keep shrinking to their small fixed basis
 instead of inheriting the new floor. A future panel that reuses `.add-form`
 gets both behaviors for free without opting in.
+
+Follow-up the same day: that fix left a third defect at 360px.
+`.commitment-form-fields`/`.deadline-form-fields` had `flex: 1` (a `0`
+basis), so the group only received whatever space was left over beside the
+button on their shared row instead of the full row — its text input stayed
+squeezed and the button sat beside a partial field group instead of below
+it. **Both wrapper classes now use `flex: 1 1 260px`**, a basis large enough
+that at 360px the group's hypothetical size forces the button onto its own
+line below it, matching how the plain `.add-form input` panels already wrap,
+while staying small enough to leave the already-correct single-row 1280px
+layout unchanged.
