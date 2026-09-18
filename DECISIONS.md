@@ -290,3 +290,86 @@ to `.deadlines-list` only, per the review's caution not to touch the shared
 `.item-text` rule the other three panels depend on. Pinned by a height
 assertion on `.item-text` at 360px in `tests/app.spec.js` (a small multiple
 of its line-height), the narrowest check that fails under the old layout.
+
+## 2026-09-18 — Unfinished work stays recoverable (Issue #23)
+
+**Carry-forward is derived at read time; nothing is stored, swept or
+migrated.** `unfinishedBefore(state, dayKey)` (pure, in `state.js`) scans
+`state.days` on every call and returns incomplete `priorities`/`tasks` from
+every stored day whose key sorts before `dayKey`, reading each one through
+the existing `getDay` so a partial old payload can't throw. There is no
+`carriedForward` key, no `version` bump, and no load-time sweep that
+rewrites past days — a sweep would violate `GOAL.md`'s "past daily plans
+must remain accessible" (Monday's plan would stop reading as Monday's plan
+the moment it was "carried forward") and would make the app's behaviour
+depend on when it happened to be opened, which is exactly what this Issue
+exists to prevent. Pinned by a test that seeds past days directly into
+`localStorage`, renders, navigates across ten days in each direction, and
+asserts the stored payload is still byte-identical.
+
+**Scope is the selected day, not the real today — unlike deadlines.**
+`renderUnfinishedPanel(dayKey)` is called with `activeDay()`, so navigating
+to Monday shows what was unfinished *before* Monday, keeping the panel
+consistent with the Priorities/Tasks/Commitments panels it sits next to,
+which also describe the selected day. Deadlines (#20) stay pinned to the
+real today instead, because a deadline's urgency is a property of the
+calendar, not of whichever day the person happens to be looking at — the
+two panels are answering different questions ("what's overdue right now"
+vs. "what's left over before the day I'm viewing") and conflating their
+scoping rules would make one of them lie.
+
+**Only `priorities` and `tasks` carry forward; commitments and week goals
+are excluded.** A commitment is an appointment at a specific time on a
+specific day — an unattended past one is a fact about history, not an open
+to-do, so surfacing it as "unfinished" would misrepresent what it is. Week
+goals belong to their week, not a day, and the week panel already shows
+them for the current week; re-surfacing them here would just be the same
+list rendered twice with different framing.
+
+**Moving a priority into a day already at its limit is refused with a
+visible message, not silently moved into tasks.** `moveItem` returns
+`{ state, error: 'limit' }` in that case, and `app.js` shows `#unfinished-msg`
+(the row stays in the panel, nothing is dropped). Silently reclassifying a
+priority as a task changes what the person meant by it; refusing and asking
+them to make room first — the same shape `addItem`'s own priority-limit
+error already uses — keeps the meaning intact and reuses a message pattern
+already in the codebase instead of inventing a second one.
+
+**One dedicated `moveItem(state, fromKey, list, id, toKey)` in `state.js`**,
+not a remove + add open-coded in `app.js`. It removes the item from the
+origin day's list and appends it to the same list on the target day (a
+priority stays a priority, a task stays a task), enforcing the limit above
+in one place rather than trusting every call site to check it.
+
+**Panel placement: a fourth full-width section inside `<main>`, directly
+below `.panels` (Priorities/Tasks/Commitments) and above the week panel.**
+It never pushes the day panels down at any width, since it only ever
+renders below them in source order — the same reasoning #20 used for the
+Upcoming panel. It sits immediately after the day panels rather than after
+Upcoming, because it is fundamentally about the selected day (like
+Priorities/Tasks/Commitments), not about the week or about dates
+independent of the day, and reads naturally as "here's the day, and here's
+what's left over from before it" before moving on to weekly and
+cross-cutting content. At 360px it stacks full-width below Commitments,
+identical in structure to the week and Upcoming panels beneath it.
+
+**Row layout is a column, not a row, unlike the other item lists.** Each
+`.unfinished-row` stacks item text, then the origin label, then its two
+actions vertically instead of packing them into one flex row the way
+`.item` does — deliberately avoiding the defect #21 shipped and #20's
+review had to fix, where a due date and urgency chip crowded `.item-text`
+down to a near-zero-width column that wrapped one character per line. With
+two action buttons ("Complete", "Move to this day") in addition to the
+origin label, packing everything into a single row at 360px would have
+reproduced that exact failure. Pinned by the same style of height assertion
+on `.item-text` the #20 review test introduced.
+
+**One summary line doubles as the empty state**, rather than a separate
+`#unfinished-empty` paragraph the way Priorities/Tasks/Commitments/Goals/
+Deadlines each have. Those panels pair a count-or-status line with a
+distinct "how to add one" empty-state message, because they have an add
+form whose absence needs explaining. The Unfinished panel has no add form —
+it is entirely derived — so "Nothing unfinished — you're all caught up."
+already says everything a separate empty-state paragraph would; a second
+element repeating the same fact would be exactly the kind of unrequested
+scaffolding the project's coding discipline asks not to add.

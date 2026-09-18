@@ -919,3 +919,245 @@ test('captures screenshots of a populated day and a week panel with partial prog
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.screenshot({ path: 'screenshots/week-panel-desktop-1280.png' });
 });
+
+test('an incomplete item from a past day appears in the Unfinished panel with its origin day named as text; a completed one does not', async ({
+  page,
+}) => {
+  await page.locator('#prev-day').click();
+  await addItem(page, 'task', 'Unfinished from yesterday');
+  await addItem(page, 'task', 'Done yesterday');
+  await page.locator('#tasks-list .item', { hasText: 'Done yesterday' }).locator('.item-toggle').click();
+  await page.locator('#today-btn').click();
+
+  await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(1);
+  await expect(page.locator('#unfinished-list .item-text')).toHaveText('Unfinished from yesterday');
+  await expect(page.locator('#unfinished-list .unfinished-origin')).toHaveText('Yesterday');
+});
+
+test('priorities and tasks from past days appear in Unfinished; commitments and week goals do not', async ({
+  page,
+}) => {
+  await page.locator('#prev-day').click();
+  await addItem(page, 'priority', 'Past priority');
+  await addItem(page, 'task', 'Past task');
+  await addCommitment(page, 'Past commitment', '09:00');
+  await addGoal(page, 'A week goal');
+  await page.locator('#today-btn').click();
+
+  await expect(page.locator('#unfinished-list .item-text')).toHaveText(['Past priority', 'Past task']);
+});
+
+test('completing an item from the Unfinished panel marks it complete on its origin day and leaves the panel, surviving reload', async ({
+  page,
+}) => {
+  await page.locator('#prev-day').click();
+  await addItem(page, 'task', 'Complete me from the panel');
+  await page.locator('#today-btn').click();
+
+  await page.locator('#unfinished-list .unfinished-complete').click();
+  await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(0);
+
+  await page.locator('#prev-day').click();
+  await expect(page.locator('#tasks-list .item')).toHaveClass(/is-complete/);
+
+  await page.reload();
+  await page.locator('#prev-day').click();
+  await expect(page.locator('#tasks-list .item')).toHaveClass(/is-complete/);
+});
+
+test('moving an item from the Unfinished panel relocates it to the selected day and off the origin day, surviving reload', async ({
+  page,
+}) => {
+  await page.locator('#prev-day').click();
+  await addItem(page, 'task', 'Move me forward');
+  await page.locator('#today-btn').click();
+
+  await page.locator('#unfinished-list .unfinished-move').click();
+  await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(0);
+  await expect(page.locator('#tasks-list .item-text')).toHaveText('Move me forward');
+
+  await page.locator('#prev-day').click();
+  await expect(page.locator('#tasks-list .item')).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.locator('#tasks-list .item-text')).toHaveText('Move me forward');
+  await page.locator('#prev-day').click();
+  await expect(page.locator('#tasks-list .item')).toHaveCount(0);
+});
+
+test('moving a priority into a day already at the limit is refused with a visible message, not silently dropped', async ({
+  page,
+}) => {
+  await addItem(page, 'priority', 'One');
+  await addItem(page, 'priority', 'Two');
+  await addItem(page, 'priority', 'Three');
+
+  await page.locator('#prev-day').click();
+  await addItem(page, 'priority', 'From yesterday');
+  await page.locator('#today-btn').click();
+
+  await page.locator('#unfinished-list .unfinished-move').click();
+  await expect(page.locator('#unfinished-msg')).toBeVisible();
+  await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(1);
+  await expect(page.locator('#priorities-list .item')).toHaveCount(3);
+});
+
+test('past days are never rewritten just by opening or navigating the app', async ({ page }) => {
+  const seed = {
+    version: 1,
+    days: {
+      '2026-09-10': {
+        priorities: [{ id: 'p1', text: 'Old priority', completed: false }],
+        tasks: [{ id: 't1', text: 'Old task', completed: false }],
+        commitments: [],
+      },
+      '2026-09-17': { priorities: [], tasks: [], commitments: [] },
+    },
+    weeks: {},
+    deadlines: [],
+  };
+
+  await page.clock.install({ time: new Date('2026-09-17T09:00:00') });
+  await page.goto('/');
+  await page.evaluate((s) => localStorage.setItem('antfarm.daily.v1', JSON.stringify(s)), seed);
+  await page.reload();
+
+  for (let i = 0; i < 10; i++) await page.locator('#prev-day').click();
+  for (let i = 0; i < 10; i++) await page.locator('#next-day').click();
+
+  const stored = await page.evaluate(() => localStorage.getItem('antfarm.daily.v1'));
+  expect(stored).toBe(JSON.stringify(seed));
+});
+
+test('the Unfinished panel is scoped to the selected day, not just the real today', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-16T09:00:00') }); // Wednesday
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  for (let i = 0; i < 2; i++) await page.locator('#prev-day').click(); // Monday
+  await addItem(page, 'task', 'Monday unfinished');
+  for (let i = 0; i < 2; i++) await page.locator('#next-day').click(); // back to Wednesday
+
+  for (let i = 0; i < 3; i++) await page.locator('#prev-day').click(); // Sunday, before Monday
+  await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(0);
+
+  for (let i = 0; i < 3; i++) await page.locator('#next-day').click(); // Wednesday, after Monday
+  await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(1);
+});
+
+test('the Unfinished count reads sensibly at zero and updates without a reload', async ({ page }) => {
+  await expect(page.locator('#unfinished-summary')).toHaveText("Nothing unfinished — you're all caught up.");
+
+  await page.locator('#prev-day').click();
+  await addItem(page, 'task', 'Needs doing');
+  await page.locator('#today-btn').click();
+
+  await expect(page.locator('#unfinished-summary')).toHaveText('1 unfinished item from earlier days.');
+
+  await page.locator('#unfinished-list .unfinished-complete').click();
+  await expect(page.locator('#unfinished-summary')).toHaveText("Nothing unfinished — you're all caught up.");
+});
+
+test('state written by the previous version (days, weeks, deadlines but nothing Unfinished-specific) still loads without throwing', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const key = new Date().toISOString().slice(0, 10);
+    localStorage.setItem(
+      'antfarm.daily.v1',
+      JSON.stringify({
+        version: 1,
+        days: { [key]: { priorities: [], tasks: [], commitments: [] } },
+        weeks: {},
+        deadlines: [],
+      })
+    );
+  });
+
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e));
+  await page.reload();
+
+  await expect(page.locator('#unfinished-summary')).toHaveText("Nothing unfinished — you're all caught up.");
+  expect(errors).toHaveLength(0);
+});
+
+test('the Unfinished panel is fully keyboard-operable with distinct accessible names for complete and move', async ({
+  page,
+}) => {
+  await page.locator('#prev-day').focus();
+  await page.keyboard.press('Enter');
+  await addItem(page, 'task', 'Keyboard unfinished');
+  await page.locator('#today-btn').focus();
+  await page.keyboard.press('Enter');
+
+  const completeBtn = page.locator('#unfinished-list .unfinished-complete');
+  const moveBtn = page.locator('#unfinished-list .unfinished-move');
+  await expect(completeBtn).toHaveAccessibleName(/Complete/);
+  await expect(moveBtn).toHaveAccessibleName(/Move/);
+  expect(await completeBtn.getAttribute('aria-label')).not.toBe(await moveBtn.getAttribute('aria-label'));
+
+  await completeBtn.focus();
+  let outline = await completeBtn.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(0);
+
+  await page.locator('#prev-day').focus();
+  await page.keyboard.press('Enter');
+  await addItem(page, 'task', 'Another keyboard item');
+  await page.locator('#today-btn').focus();
+  await page.keyboard.press('Enter');
+
+  const moveBtn2 = page.locator('#unfinished-list .unfinished-move');
+  await moveBtn2.focus();
+  outline = await moveBtn2.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.press('Space');
+  await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(0);
+  await expect(page.locator('#tasks-list .item-text', { hasText: 'Another keyboard item' })).toBeVisible();
+});
+
+test('no horizontal scroll at 360px with priorities, tasks, commitments, week goals, deadlines and unfinished items populated', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await addItem(page, 'priority', 'A reasonably long priority to check wrapping behaves');
+  await addItem(page, 'task', 'Another moderately long task description to check wrapping');
+  await addCommitment(page, 'A rather long commitment title to check panel wrapping behaves', '09:00');
+  await addGoal(page, 'A fairly long week goal to check that wrapping behaves nicely too');
+  await addDeadline(page, 'A fairly long deadline description to check that wrapping behaves nicely here too', '2026-12-01');
+
+  await page.locator('#prev-day').click();
+  await addItem(page, 'task', 'A fairly long unfinished task left over from a previous day to check wrapping');
+  await addItem(page, 'priority', 'Second unfinished item from yesterday');
+  await addItem(page, 'task', 'Third unfinished item, also from yesterday');
+  await page.locator('#today-btn').click();
+
+  const fits = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  );
+  expect(fits).toBe(true);
+
+  const text = page.locator('#unfinished-list .item-text', { hasText: 'left over from a previous day' });
+  const box = await text.boundingBox();
+  const lineHeight = await text.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  expect(box.height).toBeLessThan(lineHeight * 6);
+});
+
+test('captures screenshots of a populated day with a populated Unfinished panel', async ({ page }) => {
+  await addItem(page, 'priority', 'Ship the unfinished-work panel');
+  await addItem(page, 'task', 'Review open issues');
+
+  await page.locator('#prev-day').click();
+  await addItem(page, 'task', 'Carried over from yesterday');
+  await addItem(page, 'priority', 'Also carried over');
+  await page.locator('#today-btn').click();
+
+  await page.setViewportSize({ width: 360, height: 1300 });
+  await page.screenshot({ path: 'screenshots/unfinished-mobile-360.png' });
+
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  await page.screenshot({ path: 'screenshots/unfinished-desktop-1280.png' });
+});

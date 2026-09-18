@@ -146,6 +146,53 @@ export function removeItem(state, key, list, id) {
   return withDay(state, key, nextDay);
 }
 
+// Finds incomplete priorities and tasks from every stored day strictly
+// before `dayKey` — the data the Unfinished panel surfaces. This is derived
+// from `state.days` at read time, never stored or swept on load, so past
+// days stay byte-identical until the person explicitly acts on an item (see
+// DECISIONS.md). Reads route through `getDay` so a partial/old payload can't
+// throw. Commitments and week goals are deliberately excluded. Ordered by
+// origin day descending (most recent first): the freshest unfinished work is
+// the most likely to still matter.
+export function unfinishedBefore(state, dayKey) {
+  const keys = Object.keys(state.days)
+    .filter((key) => key < dayKey)
+    .sort()
+    .reverse();
+  const result = [];
+  for (const key of keys) {
+    const day = getDay(state, key);
+    for (const list of ['priorities', 'tasks']) {
+      for (const item of day[list]) {
+        if (!item.completed) result.push({ item, dayKey: key, list });
+      }
+    }
+  }
+  return result;
+}
+
+// Moves an item from one day's list to another day's same list (a priority
+// stays a priority, a task stays a task) — one function rather than the
+// Unfinished panel's "move" action open-coding a remove + add. Returns
+// { state, error } where error is null or 'limit': moving a priority into a
+// day already at MAX_PRIORITIES would otherwise either silently drop it or
+// silently break the 3-priority rule, so it's refused instead, the same
+// visible-message shape `addItem`'s limit error already uses.
+export function moveItem(state, fromKey, list, id, toKey) {
+  const fromDay = getDay(state, fromKey);
+  const item = fromDay[list].find((entry) => entry.id === id);
+  if (!item) return { state, error: null };
+  if (list === 'priorities') {
+    const toDay = getDay(state, toKey);
+    if (toDay.priorities.length >= MAX_PRIORITIES) return { state, error: 'limit' };
+  }
+  const nextFromDay = { ...fromDay, [list]: fromDay[list].filter((entry) => entry.id !== id) };
+  const afterRemove = withDay(state, fromKey, nextFromDay);
+  const toDay = getDay(afterRemove, toKey);
+  const nextToDay = { ...toDay, [list]: [...toDay[list], item] };
+  return { state: withDay(afterRemove, toKey, nextToDay), error: null };
+}
+
 function withWeek(state, key, week) {
   return { ...state, weeks: { ...state.weeks, [key]: week } };
 }
