@@ -433,3 +433,71 @@ aria-label became `', hoje'` / `', com trabalho planejado'`.** Not called out
 in Issue #27's literal list (a plain string concatenation, not part of the
 `toLocaleDateString` call slice 3 owns), found by grepping `app.js` for
 remaining English literals as the Issue instructed.
+
+## 2026-09-18 — pt-BR translation, slice 3: date formatting, week-strip
+weekdays and the English guard test (Issue #28)
+
+**`'pt-BR'` hard-coded as the locale argument of all five `toLocaleDateString`
+calls, replacing `undefined`.** `undefined` defers to whatever locale the
+visitor's browser happens to be configured with, so a US-configured browser
+would render `Friday, September 18, 2026` underneath a Portuguese heading —
+the product committed to one language in slices 1 and 2 (#26, #27), and a
+locale-dependent date format would silently break that commitment for a share
+of visitors. Pinned by a `test.describe` block that sets the Playwright
+context's own `locale` to `en-US` and asserts the app still renders pt-BR
+dates — a passing suite would not prove the fix without a test that puts the
+browser locale in an actively adversarial position.
+
+**Deadline due dates (`formatDueDate`, also reused by the week heading's
+"Semana de …") switched from `{ month: 'short', day: 'numeric', year:
+'numeric' }` (`18 de set. de 2026`) to `{ day: '2-digit', month: '2-digit',
+year: 'numeric' }` (`18/09/2026`).** The Issue's numeric-date requirement
+("Any numeric date is dd/mm/aaaa, never mm/dd/aaaa — deadline due dates
+included") only bites for a format that is actually numeric; the original
+`short`-month format already read day-before-month once pt-BR was passed in,
+so leaving it alone would have satisfied the letter of the requirement
+vacuously. A genuinely numeric `dd/mm/aaaa` is also the more natural
+Brazilian convention for a compact due-date label (as opposed to the full
+prose date heading, which keeps its spelled-out weekday and month), so the
+format was changed rather than left as short-month text.
+
+**Week-strip weekday letters: `weekday: 'short'` (`seg.`, `ter.`, `qua.`,
+`qui.`, `sex.`, `sáb.`, `dom.`), not `'narrow'`.** `narrow` collapses pt-BR's
+weekdays to `S T Q Q S S D` — three ambiguous pairs (segunda/sábado,
+terça/quinta, sexta/sábado all narrow to `S`, `T`/`Q` collide too), so the
+letter alone stops identifying a day, which the Issue calls out explicitly.
+`short` is already built into `Intl` and is distinct for all seven days
+without inventing a custom abbreviation table (`seg ter qua qui sex sáb dom`
+minus the trailing dots) — reusing what `Intl` already provides one option
+value away is the smaller diff, and the `.week-day-label` column is narrow
+enough (`flex: 1 1 0`, `min-width: 0`, `uppercase`) that a 4-character label
+still fits at 360px, pinned by a widened no-horizontal-scroll assertion that
+now also checks `.week-day` count and the strip's own `scrollWidth`.
+
+**The origin label (`originLabel`, unfinished items >1 day back) and the
+week-strip button's full accessible name keep their existing `Intl` option
+shapes (`weekday: 'short'/'long'` + `month: 'short'/'long'` + `day:
+'numeric'`), just with `'pt-BR'` swapped in for `undefined`.** Neither is a
+compact numeric due-date label — they're prose fragments (`ter., 15 de set.`
+/ `sexta-feira, 18 de setembro, hoje`) — so the numeric dd/mm/aaaa
+requirement doesn't apply to them, and changing their shape beyond the
+locale argument wasn't asked for.
+
+**Native `<input type="time">` / `<input type="date">` are left alone.**
+Both render using the browser's own locale and cannot be forced to pt-BR from
+the page; replacing them with custom pickers just to control that rendering
+was explicitly out of scope and would trade a native, accessible, well-tested
+control for a bespoke one to fix a cosmetic mismatch. Times already store and
+display as `HH:MM` (24-hour, the Brazilian convention) independent of the
+input widget's own chrome.
+
+**The guard test lives in the same locale-forcing `describe` block, checking
+`document.documentElement.lang === 'pt-BR'` and that `document.body.innerText`
+contains none of a fixed, short list of former English UI words
+(`Today`, `Tasks`, `Priorities`, `Commitments`, `Unfinished`, `Add`, `Delete`,
+`Week`, `Overdue`, `Yesterday`, `September`, `Friday`) as whole words,
+case-insensitively, on a day with every panel populated.** Verified locally
+that it actually catches a regression: temporarily reverting
+`#unfinished-heading` to `Unfinished` in `index.html` and rerunning the test
+made it fail on that exact word, then the revert was undone before
+committing — a guard that only ever passes proves nothing.
