@@ -527,3 +527,59 @@ that at 360px the group's hypothetical size forces the button onto its own
 line below it, matching how the plain `.add-form input` panels already wrap,
 while staying small enough to leave the already-correct single-row 1280px
 layout unchanged.
+
+## 2026-09-18 — `i18n.js` catalogue, no visible change (Issue #34)
+
+**Reverses the "no i18n layer" call from Issue #26's slice 1 decision.**
+That decision was correct when `GOAL.md` committed the product to exactly one
+language permanently; `GOAL.md` now specifies pt-BR by default with a
+user-selectable English interface, so the indirection this Issue adds earns
+its keep. Issue #33 is the switcher this catalogue exists for.
+
+**One flat `strings` object in `i18n.js`, keyed by camelCase name, plus a
+single export `LOCALE = 'pt-BR'`.** No nesting by panel, no ICU/plural
+syntax, no build step. `t(key, params)` looks up `strings[key]` and replaces
+`{name}` placeholders from `params` with `String(...)` — the whole helper is
+four lines. Every value is a plain string (never a function), so "does every
+key have real text" is one `Object.values(strings).every(v => v.trim())`
+check — the mechanism the new "no missing or empty string" test uses — rather
+than something that has to special-case callable entries.
+
+**Plurals stay a caller-side key choice, not catalogue logic.** Where the
+rendered sentence depends on a count (`unfinishedOne`/`unfinishedMany`,
+`weekProgressOne`/`weekProgressMany`, `deadlinesSummaryOverdueOne`/
+`...Many`), the catalogue carries both fully-formed templates and the caller
+in `app.js`/`state.js` picks between them with the same `count === 1` check
+the code already had before this Issue — the pt-BR agreement rule doesn't
+move, only where the two strings it chooses between live.
+
+**Static markup opts in per-element with `data-i18n` / `data-i18n-placeholder`
+/ `data-i18n-aria-label`, filled once by `applyStaticText()` at the top of
+`app.js`.** Elements `render()` already overwrites on every call (the
+eyebrow, `#today-date`, `#week-heading`, the three summary lines) keep no
+`data-i18n*` attribute and no markup default text — `render()` was already
+the single writer for those, so giving them a second, redundant source in the
+catalogue would be exactly the two-copies-drift problem this Issue exists to
+remove. `index.html` itself now ships with no pt-BR text at all; every string
+a person sees comes from `i18n.js` through either path.
+
+**`state.js`'s `deadlineLabel`/`approachingSummary` import `t` and look
+strings up themselves, keeping their existing signatures.** The alternative —
+returning a key and values for `app.js` to render — would need `app.js` to
+import the catalogue a second way and re-implement the same lookup call
+`state.js` can just make directly, for a module that was already documented
+as "pure" in the sense of "no DOM access," not "no imports." `i18n.js` has no
+DOM access either, so the module keeps that property.
+
+**`</html>`'s `lang="pt-BR"` stays a plain markup attribute, not driven by
+`LOCALE`.** It isn't a `toLocaleDateString` call site (the thing `LOCALE`
+was scoped to own) and nothing currently writes it at runtime; wiring it up
+now for a switcher that doesn't exist yet is exactly the "boilerplate for
+later" this Issue was told not to add. Issue #33 sets it when it adds the
+control that actually changes the active language.
+
+**No English catalogue and no switcher here, deliberately.** Issue #33 adds
+the second language, the control, and the persistence; shipping a
+half-translated interface or an unused switcher before that Issue lands
+would leave `main` in a state nothing could verify as "nothing a user sees
+changed."

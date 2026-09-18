@@ -41,6 +41,16 @@ test('the page lang and title are pt-BR', async ({ page }) => {
   await expect(page).toHaveTitle('Hoje — A.N.T.F.A.R.M. Diário');
 });
 
+test('the i18n catalogue has no missing or empty string', async ({ page }) => {
+  const badKeys = await page.evaluate(async () => {
+    const { strings } = await import('/i18n.js');
+    return Object.entries(strings)
+      .filter(([, value]) => typeof value !== 'string' || value.trim() === '')
+      .map(([key]) => key);
+  });
+  expect(badKeys).toEqual([]);
+});
+
 test('panel headings and the priorities hint are in pt-BR', async ({ page }) => {
   await expect(page.locator('#priorities-heading')).toHaveText('Prioridades');
   await expect(page.locator('.panel-hint')).toHaveText('Até 3');
@@ -418,6 +428,11 @@ test.describe('pt-BR dates render regardless of the browser locale', () => {
     for (const word of englishWords) {
       expect(bodyText).not.toMatch(new RegExp(`\\b${word}\\b`, 'i'));
     }
+  });
+
+  test('the i18n module locale is pt-BR, not derived from the browser locale', async ({ page }) => {
+    const locale = await page.evaluate(async () => (await import('/i18n.js')).LOCALE);
+    expect(locale).toBe('pt-BR');
   });
 });
 

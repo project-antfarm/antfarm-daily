@@ -1,5 +1,7 @@
 // Pure state module: no DOM access. app.js wires this to the page.
 
+import { t } from './i18n.js';
+
 export const STORAGE_KEY = 'antfarm.daily.v1';
 export const MAX_PRIORITIES = 3;
 export const LISTS = ['priorities', 'tasks', 'commitments'];
@@ -291,12 +293,12 @@ function daysBetween(fromKey, toKey) {
 // date in a second place.
 export function deadlineLabel(due, todayKeyValue) {
   const diff = daysBetween(todayKeyValue, due);
-  if (diff < 0) return 'Atrasado';
-  if (diff === 0) return 'Vence hoje';
-  if (diff === 1) return 'Vence amanhã';
+  if (diff < 0) return t('deadlineOverdue');
+  if (diff === 0) return t('deadlineDueToday');
+  if (diff === 1) return t('deadlineDueTomorrow');
   // diff is always >= 2 here (0 and 1 are handled above), so "dias" is
   // always plural — no singular branch needed.
-  if (diff <= APPROACHING_DAYS) return `Vence em ${diff} dias`;
+  if (diff <= APPROACHING_DAYS) return t('deadlineDueInDays', { days: diff });
   return '';
 }
 
@@ -304,17 +306,17 @@ export function deadlineLabel(due, todayKeyValue) {
 // the whole list. Completed deadlines are excluded from both counts, so
 // finishing something already late removes it from "overdue".
 export function approachingSummary(deadlines, todayKeyValue) {
-  if (deadlines.length === 0) return 'Nenhum prazo ainda.';
+  if (deadlines.length === 0) return t('deadlinesSummaryNone');
   const active = deadlines.filter((item) => !item.completed);
   const overdue = active.filter((item) => item.due < todayKeyValue).length;
   const dueSoon = active.filter(
     (item) => item.due >= todayKeyValue && daysBetween(todayKeyValue, item.due) <= APPROACHING_DAYS
   ).length;
-  if (overdue === 0 && dueSoon === 0) return 'Nada vencendo em breve.';
+  if (overdue === 0 && dueSoon === 0) return t('deadlinesSummaryClear');
   const parts = [];
-  if (overdue > 0) parts.push(`${overdue} ${overdue === 1 ? 'atrasado' : 'atrasados'}`);
+  if (overdue > 0) parts.push(t(overdue === 1 ? 'deadlinesSummaryOverdueOne' : 'deadlinesSummaryOverdueMany', { count: overdue }));
   // "vencendo em breve" is a gerund phrase and doesn't inflect for number,
   // so it needs no singular/plural branch.
-  if (dueSoon > 0) parts.push(`${dueSoon} vencendo em breve`);
+  if (dueSoon > 0) parts.push(t('deadlinesSummaryDueSoon', { count: dueSoon }));
   return `${parts.join(', ')}.`;
 }
