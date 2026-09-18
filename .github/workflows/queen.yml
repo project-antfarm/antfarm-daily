@@ -4,15 +4,15 @@ on:
   workflow_run:
     workflows: [ci]
     types: [completed]
+  # A blocked Issue needs a decision now, not at the next heartbeat.
+  issues:
+    types: [labeled]
   # Heartbeat every 3 hours, off the top of the hour where GitHub delays cron
   # the most. It recovers the colony after a guard block or a missed event; the
   # guard step ends it for free when a Worker is busy and nothing awaits review.
   schedule:
     - cron: "17 */3 * * *"
   workflow_dispatch:
-concurrency:
-  group: queen
-  cancel-in-progress: false
 permissions: {}
 env:
   ROLE: queen
@@ -22,8 +22,15 @@ env:
   SPECIMEN: ${{ github.event.repository.name }}
 jobs:
   queen:
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && startsWith(github.event.workflow_run.head_branch, 'ant/'))
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && startsWith(github.event.workflow_run.head_branch, 'ant/'))
+      || (github.event_name == 'issues' && github.event.label.name == 'blocked')
     runs-on: ubuntu-latest
+    # Job level on purpose: see ant.yml.
+    concurrency:
+      group: queen
+      cancel-in-progress: false
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

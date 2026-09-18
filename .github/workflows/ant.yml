@@ -7,9 +7,6 @@ on:
       issue:
         description: Issue number
         required: true
-concurrency:
-  group: worker
-  cancel-in-progress: false
 permissions: {}
 env:
   ROLE: worker
@@ -22,6 +19,11 @@ jobs:
   ant:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ready' || github.event.label.name == 'needs-fix'
     runs-on: ubuntu-latest
+    # Job level on purpose: a workflow-level group also queues the runs that the
+    # `if` above discards, and a newer queued run cancels an older pending one.
+    concurrency:
+      group: worker
+      cancel-in-progress: false
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -142,6 +144,29 @@ jobs:
           name: trace-worker-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.claude.outputs.execution_file }}
           retention-days: 90
+      - name: a failed execution blocks the Issue instead of retrying
+        if: always() && steps.guard.outcome == 'success' && steps.guard.outputs.skip != 'true' && steps.claude.outputs.conclusion != 'success'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ISSUE: ${{ steps.guard.outputs.issue }}
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # With an open PR the review flow takes over; otherwise nothing would
+          # ever pick this Issue up again except a blind retry after the lease.
+          [ "$(gh pr list --head "ant/issue-$ISSUE" --state open --json number --jq length)" = "0" ] || { echo "a PR exists; leaving it to the review flow"; exit 0; }
+          reason="the agent did not run (infrastructure failure)"; turns=0
+          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ]; then
+            reason=$(jq -r '([.[]? | select(.type=="result")] | last) | .terminal_reason // .subtype // "unknown"' "$EXEC_FILE")
+            turns=$(jq -r '([.[]? | select(.type=="result")] | last) | .num_turns // 0' "$EXEC_FILE")
+          fi
+          if gh api "repos/$GH_REPO/branches/ant/issue-$ISSUE" --jq .name >/dev/null 2>&1; then
+            saved="Partial work was pushed to the branch ant/issue-$ISSUE."
+          else
+            saved="Nothing was pushed; the work of this execution is lost."
+          fi
+          gh issue edit "$ISSUE" --remove-label in-progress --add-label blocked
+          gh issue comment "$ISSUE" --body "Blocked by the infrastructure: the Worker stopped without opening a PR. Reason: $reason, after $turns turns. $saved There is no automatic retry. The Queen decides: split this into smaller Issues, change the approach, or label it ready again. Run: $RUN_URL"
       - name: record execution
         if: always() && steps.guard.outcome == 'success' && steps.guard.outputs.skip != 'true'
         env:

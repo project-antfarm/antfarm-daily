@@ -12,7 +12,7 @@ queen:
   review_wait_max_seconds: 600
 worker:
   model: claude-sonnet-5
-  max_turns: 60
+  max_turns: 100
   runs_per_day: 10
 # Weekly budget, counted since the last allowance reset (Sunday 16:00 UTC)
 # across every run of this specimen. Two locks; either one stops every role.
