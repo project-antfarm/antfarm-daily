@@ -26,6 +26,24 @@ import {
   moveItem,
   MAX_PRIORITIES,
 } from './state.js';
+import { t, LOCALE } from './i18n.js';
+
+// Fills every markup element that carries a data-i18n* attribute from the
+// catalogue, once at boot. Elements whose text changes on every render (the
+// eyebrow, the date heading, panel summaries...) are set directly by render()
+// instead and carry no data-i18n attribute.
+function applyStaticText() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
+  });
+}
+applyStaticText();
 
 const eyebrow = document.getElementById('day-eyebrow');
 const dateHeading = document.getElementById('today-date');
@@ -100,7 +118,7 @@ function selectDay(dayKey) {
 }
 
 function formatDate(key) {
-  return parseKey(key).toLocaleDateString('pt-BR', {
+  return parseKey(key).toLocaleDateString(LOCALE, {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -109,7 +127,7 @@ function formatDate(key) {
 }
 
 function formatDueDate(key) {
-  return parseKey(key).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return parseKey(key).toLocaleDateString(LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function renderItem(key, list, item, index) {
@@ -155,16 +173,16 @@ function renderItem(key, list, item, index) {
 
   const status = document.createElement('span');
   status.className = 'sr-only';
-  status.textContent = item.completed ? ' (concluído)' : ' (não concluído)';
+  status.textContent = item.completed ? t('itemCompleted') : t('itemNotCompleted');
   toggle.appendChild(status);
 
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'item-delete';
-  del.setAttribute('aria-label', `Excluir "${item.text}"`);
+  del.setAttribute('aria-label', t('itemDeleteLabel', { text: item.text }));
   del.textContent = '✕';
   del.addEventListener('click', () => {
-    if (!window.confirm(`Excluir "${item.text}"? Esta ação não pode ser desfeita.`)) return;
+    if (!window.confirm(t('itemDeleteConfirm', { text: item.text }))) return;
     state = removeItem(state, key, list, item.id);
     save(state);
     render();
@@ -202,16 +220,16 @@ function renderGoal(weekKey, item) {
 
   const status = document.createElement('span');
   status.className = 'sr-only';
-  status.textContent = item.completed ? ' (concluído)' : ' (não concluído)';
+  status.textContent = item.completed ? t('itemCompleted') : t('itemNotCompleted');
   toggle.appendChild(status);
 
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'item-delete';
-  del.setAttribute('aria-label', `Excluir "${item.text}"`);
+  del.setAttribute('aria-label', t('itemDeleteLabel', { text: item.text }));
   del.textContent = '✕';
   del.addEventListener('click', () => {
-    if (!window.confirm(`Excluir "${item.text}"? Esta ação não pode ser desfeita.`)) return;
+    if (!window.confirm(t('itemDeleteConfirm', { text: item.text }))) return;
     state = removeGoal(state, weekKey, item.id);
     save(state);
     render();
@@ -267,16 +285,16 @@ function renderDeadline(item, today) {
 
   const status = document.createElement('span');
   status.className = 'sr-only';
-  status.textContent = item.completed ? ' (concluído)' : ' (não concluído)';
+  status.textContent = item.completed ? t('itemCompleted') : t('itemNotCompleted');
   toggle.appendChild(status);
 
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'item-delete';
-  del.setAttribute('aria-label', `Excluir "${item.text}"`);
+  del.setAttribute('aria-label', t('itemDeleteLabel', { text: item.text }));
   del.textContent = '✕';
   del.addEventListener('click', () => {
-    if (!window.confirm(`Excluir "${item.text}"? Esta ação não pode ser desfeita.`)) return;
+    if (!window.confirm(t('itemDeleteConfirm', { text: item.text }))) return;
     state = removeDeadline(state, item.id);
     save(state);
     render();
@@ -290,13 +308,13 @@ function renderDeadline(item, today) {
 // relative to the selected day (not the real today), since the panel itself
 // is scoped to the selected day.
 function originLabel(originKey, selectedKey) {
-  if (originKey === addDays(selectedKey, -1)) return 'Ontem';
-  return parseKey(originKey).toLocaleDateString('pt-BR', { weekday: 'short', month: 'short', day: 'numeric' });
+  if (originKey === addDays(selectedKey, -1)) return t('unfinishedOrigin');
+  return parseKey(originKey).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function unfinishedSummaryText(count) {
-  if (count === 0) return 'Nada pendente — você está em dia.';
-  return `${count} ${count === 1 ? 'item pendente' : 'itens pendentes'} de dias anteriores.`;
+  if (count === 0) return t('unfinishedNone');
+  return t(count === 1 ? 'unfinishedOne' : 'unfinishedMany', { count });
 }
 
 function renderUnfinishedRow(entry, selectedKey) {
@@ -323,8 +341,8 @@ function renderUnfinishedRow(entry, selectedKey) {
   const completeBtn = document.createElement('button');
   completeBtn.type = 'button';
   completeBtn.className = 'unfinished-btn unfinished-complete';
-  completeBtn.textContent = 'Concluir';
-  completeBtn.setAttribute('aria-label', `Concluir "${entry.item.text}" de ${origin.textContent}`);
+  completeBtn.textContent = t('unfinishedComplete');
+  completeBtn.setAttribute('aria-label', t('unfinishedCompleteLabel', { text: entry.item.text, origin: origin.textContent }));
   completeBtn.addEventListener('click', () => {
     state = toggleItem(state, entry.dayKey, entry.list, entry.item.id);
     save(state);
@@ -334,8 +352,8 @@ function renderUnfinishedRow(entry, selectedKey) {
   const moveBtn = document.createElement('button');
   moveBtn.type = 'button';
   moveBtn.className = 'unfinished-btn unfinished-move';
-  moveBtn.textContent = 'Trazer para este dia';
-  moveBtn.setAttribute('aria-label', `Trazer "${entry.item.text}" de ${origin.textContent} para este dia`);
+  moveBtn.textContent = t('unfinishedMove');
+  moveBtn.setAttribute('aria-label', t('unfinishedMoveLabel', { text: entry.item.text, origin: origin.textContent }));
   moveBtn.addEventListener('click', () => {
     unfinishedMsg.hidden = true;
     const result = moveItem(state, entry.dayKey, entry.list, entry.item.id, selectedKey);
@@ -361,15 +379,14 @@ function renderUnfinishedPanel(dayKey) {
 }
 
 function progressLabel({ completed, total }) {
-  if (total === 0) return 'Nenhum trabalho planejado ainda esta semana.';
-  const done = completed === 1 ? 'concluído' : 'concluídos';
-  return `${completed} de ${total} ${done} esta semana`;
+  if (total === 0) return t('weekProgressNone');
+  return t(completed === 1 ? 'weekProgressOne' : 'weekProgressMany', { completed, total });
 }
 
 function weekHeadingText(dayKey) {
   const weekKey = weekStart(dayKey);
-  if (weekKey === weekStart(todayKey())) return 'Esta semana';
-  return `Semana de ${formatDueDate(weekKey)}`;
+  if (weekKey === weekStart(todayKey())) return t('weekHeading');
+  return t('weekHeadingOf', { date: formatDueDate(weekKey) });
 }
 
 function renderWeekPanel(dayKey) {
@@ -419,7 +436,7 @@ function renderWeekStrip(key) {
     const letter = document.createElement('span');
     letter.className = 'week-day-label';
     letter.setAttribute('aria-hidden', 'true');
-    letter.textContent = date.toLocaleDateString('pt-BR', { weekday: 'short' });
+    letter.textContent = date.toLocaleDateString(LOCALE, { weekday: 'short' });
 
     const num = document.createElement('span');
     num.className = 'week-day-num';
@@ -430,9 +447,9 @@ function renderWeekStrip(key) {
     dot.className = 'week-day-dot';
     dot.setAttribute('aria-hidden', 'true');
 
-    let label = date.toLocaleDateString('pt-BR', { weekday: 'long', month: 'long', day: 'numeric' });
-    if (isToday) label += ', hoje';
-    if (hasWork) label += ', com trabalho planejado';
+    let label = date.toLocaleDateString(LOCALE, { weekday: 'long', month: 'long', day: 'numeric' });
+    if (isToday) label += t('weekDayToday');
+    if (hasWork) label += t('weekDayHasWork');
     btn.setAttribute('aria-label', label);
 
     btn.append(letter, num, dot);
@@ -445,7 +462,7 @@ function render() {
   const key = activeDay();
   const isToday = key === todayKey();
 
-  eyebrow.textContent = isToday ? 'Hoje' : 'Visualizando';
+  eyebrow.textContent = isToday ? t('dayToday') : t('dayViewing');
   dateHeading.textContent = formatDate(key);
 
   const day = getDay(state, key);
