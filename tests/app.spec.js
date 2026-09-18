@@ -22,6 +22,14 @@ async function addGoal(page, text) {
   await input.press('Enter');
 }
 
+async function addDeadline(page, text, due) {
+  if (due !== undefined) await page.locator('#deadline-due-input').fill(due);
+  const input = page.locator('#deadline-input');
+  await input.focus();
+  await input.fill(text);
+  await input.press('Enter');
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
@@ -649,6 +657,250 @@ test('no horizontal scroll at 360px with priorities, tasks, commitments and week
     () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
   );
   expect(fits).toBe(true);
+});
+
+test('adds a deadline and it survives a reload', async ({ page }) => {
+  await addDeadline(page, 'Renew passport', '2026-12-01');
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(1);
+  await expect(page.locator('#deadlines-list .item-text')).toHaveText('Renew passport');
+
+  await page.reload();
+
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(1);
+  await expect(page.locator('#deadlines-list .item-text')).toHaveText('Renew passport');
+});
+
+test('a deadline can be completed, un-completed and deleted, each surviving a reload', async ({ page }) => {
+  await addDeadline(page, 'File taxes', '2026-12-01');
+  const item = page.locator('#deadlines-list .item').first();
+  const toggle = item.locator('.item-toggle');
+
+  await toggle.click();
+  await expect(item).toHaveClass(/is-complete/);
+  await page.reload();
+  await expect(page.locator('#deadlines-list .item')).toHaveClass(/is-complete/);
+
+  await page.locator('#deadlines-list .item-toggle').click();
+  await expect(page.locator('#deadlines-list .item')).not.toHaveClass(/is-complete/);
+  await page.reload();
+  await expect(page.locator('#deadlines-list .item')).not.toHaveClass(/is-complete/);
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#deadlines-list .item-delete').click();
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
+});
+
+test('deleting a deadline requires confirmation; dismissing keeps it', async ({ page }) => {
+  await addDeadline(page, 'Renew passport', '2026-12-01');
+
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.locator('#deadlines-list .item-delete').click();
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(1);
+});
+
+test('submitting a deadline with empty text, or text but no due date, adds nothing and shows a message', async ({
+  page,
+}) => {
+  await page.locator('#deadline-due-input').fill('2026-12-01');
+  await page.locator('#deadline-input').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
+  await expect(page.locator('#deadline-msg')).toBeVisible();
+
+  await page.locator('#deadline-due-input').fill('');
+  await addDeadline(page, 'No due date set');
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
+  await expect(page.locator('#deadline-msg')).toBeVisible();
+});
+
+test('deadlines render sorted by due date regardless of add order', async ({ page }) => {
+  await addDeadline(page, 'Latest', '2026-12-20');
+  await addDeadline(page, 'Earliest', '2026-11-01');
+  await addDeadline(page, 'Middle', '2026-12-01');
+
+  await expect(page.locator('#deadlines-list .item-text')).toHaveText(['Earliest', 'Middle', 'Latest']);
+});
+
+test('relative urgency labels are distinct text, readable without color', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-17T09:00:00') });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await addDeadline(page, 'Was due yesterday', '2026-09-16');
+  await addDeadline(page, 'Due today', '2026-09-17');
+  await addDeadline(page, 'Due tomorrow', '2026-09-18');
+  await addDeadline(page, 'Due in five days', '2026-09-22');
+
+  const labels = page.locator('#deadlines-list .item-urgency');
+  await expect(labels).toHaveText(['Overdue', 'Due today', 'Due tomorrow', 'Due in 5 days']);
+});
+
+test('a completed overdue deadline is not counted as overdue in the summary', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-17T09:00:00') });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await addDeadline(page, 'Late but done', '2026-09-01');
+  await expect(page.locator('#deadlines-summary')).toContainText('1 overdue');
+
+  await page.locator('#deadlines-list .item-toggle').click();
+  await expect(page.locator('#deadlines-summary')).not.toContainText('overdue');
+});
+
+test('the summary line reads sensibly with zero deadlines and updates without a reload', async ({ page }) => {
+  await expect(page.locator('#deadlines-summary')).toHaveText('No deadlines yet.');
+
+  await addDeadline(page, 'Something due', '2026-12-01');
+  await expect(page.locator('#deadlines-summary')).not.toHaveText('No deadlines yet.');
+  await expect(page.locator('#deadlines-summary')).not.toBeEmpty();
+
+  await page.locator('#deadlines-list .item-toggle').click();
+  await expect(page.locator('#deadlines-summary')).not.toBeEmpty();
+});
+
+test('deadlines are independent of the selected day and week, with an unchanging label', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-17T09:00:00') });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await addDeadline(page, 'Cross-cutting deadline', '2026-09-22');
+  const urgencyBefore = await page.locator('#deadlines-list .item-urgency').innerText();
+
+  await page.locator('#prev-day').click();
+  await expect(page.locator('#deadlines-list .item-text')).toHaveText('Cross-cutting deadline');
+
+  for (let i = 0; i < 7; i++) await page.locator('#prev-day').click();
+  await expect(page.locator('#deadlines-list .item-text')).toHaveText('Cross-cutting deadline');
+  await expect(page.locator('#deadlines-list .item-urgency')).toHaveText(urgencyBefore);
+});
+
+test('a day stored by the previous version (no deadlines key) still loads and accepts a new deadline', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const key = new Date().toISOString().slice(0, 10);
+    localStorage.setItem(
+      'antfarm.daily.v1',
+      JSON.stringify({
+        version: 1,
+        days: { [key]: { priorities: [], tasks: [], commitments: [] } },
+        weeks: {},
+      })
+    );
+  });
+
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e));
+  await page.reload();
+
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
+  await expect(page.locator('#deadlines-empty')).toBeVisible();
+  expect(errors).toHaveLength(0);
+
+  await addDeadline(page, 'First deadline after upgrade', '2026-12-01');
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(1);
+});
+
+test('the Upcoming panel is fully keyboard-operable', async ({ page }) => {
+  await page.locator('#deadline-input').focus();
+  let outline = await page.locator('#deadline-input').evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.type('Keyboard deadline');
+
+  await page.locator('#deadline-due-input').focus();
+  outline = await page.locator('#deadline-due-input').evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.locator('#deadline-due-input').fill('2026-12-01');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(1);
+
+  const toggle = page.locator('#deadlines-list .item-toggle');
+  await expect(toggle).toHaveAccessibleName(/.+/);
+  await toggle.focus();
+  outline = await toggle.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe('none');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#deadlines-list .item')).toHaveClass(/is-complete/);
+
+  const del = page.locator('#deadlines-list .item-delete');
+  await expect(del).toHaveAccessibleName(/.+/);
+  await del.focus();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#deadlines-list .item')).toHaveCount(0);
+});
+
+test('completed deadlines stay visible and are distinguishable by more than color', async ({ page }) => {
+  await addDeadline(page, 'Finish onboarding doc', '2026-12-01');
+  const item = page.locator('#deadlines-list .item').first();
+  await item.locator('.item-toggle').click();
+
+  await expect(item).toBeVisible();
+  await expect(item).toHaveClass(/is-complete/);
+  await expect(item.locator('.item-text')).toHaveCSS('text-decoration-line', 'line-through');
+});
+
+test('the week panel and the Upcoming panel are inside the main landmark; a non-current week is named', async ({
+  page,
+}) => {
+  await expect(page.locator('main .week-panel')).toHaveCount(1);
+  await expect(page.locator('main .upcoming-panel')).toHaveCount(1);
+
+  await expect(page.locator('#week-heading')).toHaveText('This Week');
+
+  for (let i = 0; i < 7; i++) await page.locator('#prev-day').click();
+  await expect(page.locator('#week-heading')).not.toHaveText('This Week');
+  await expect(page.locator('#week-heading')).not.toBeEmpty();
+});
+
+test('no horizontal scroll at 360px with priorities, tasks, commitments, week goals and deadlines populated', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await addItem(page, 'priority', 'A reasonably long priority to check wrapping behaves');
+  await addItem(page, 'task', 'Another moderately long task description to check wrapping');
+  await addCommitment(page, 'A rather long commitment title to check panel wrapping behaves', '09:00');
+  await addGoal(page, 'A fairly long week goal to check that wrapping behaves nicely too');
+  await addDeadline(page, 'A fairly long deadline description to check that wrapping behaves nicely here too', '2026-12-01');
+  await addDeadline(page, 'Second deadline', '2026-11-01');
+  await addDeadline(page, 'Third deadline', '2026-10-01');
+  const fits = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  );
+  expect(fits).toBe(true);
+
+  // Pins the one-character-per-line regression: the due date and urgency
+  // chip used to crowd .item-text down to near-zero width, wrapping its
+  // text one letter per line instead of by word.
+  const text = page.locator('#deadlines-list .item-text').first();
+  const box = await text.boundingBox();
+  const lineHeight = await text.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  expect(box.height).toBeLessThan(lineHeight * 6);
+});
+
+test('captures screenshots of a populated day and an Upcoming panel with overdue and future deadlines', async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date('2026-09-17T09:00:00') });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await addItem(page, 'priority', 'Ship the deadlines feature');
+  await addItem(page, 'task', 'Review open issues');
+  await addDeadline(page, 'Overdue renewal', '2026-09-01');
+  await addDeadline(page, 'Upcoming conference talk', '2026-10-15');
+
+  await page.setViewportSize({ width: 360, height: 1200 });
+  await page.screenshot({ path: 'screenshots/deadlines-mobile-360.png' });
+
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.screenshot({ path: 'screenshots/deadlines-desktop-1280.png' });
 });
 
 test('captures screenshots of a populated day and a week panel with partial progress', async ({ page }) => {
