@@ -373,3 +373,44 @@ it is entirely derived — so "Nothing unfinished — you're all caught up."
 already says everything a separate empty-state paragraph would; a second
 element repeating the same fact would be exactly the kind of unrequested
 scaffolding the project's coding discipline asks not to add.
+
+## 2026-09-18 — pt-BR translation, slice 1: static `index.html` strings (Issue #26)
+
+**Literals translated in place, no i18n layer.** No strings module, catalogue,
+`t()` helper, `data-i18n` attribute or language switcher. `GOAL.md` commits the
+product to exactly one language, permanently — an indirection layer earns its
+keep only when a second language is a real possibility, which is out of scope
+here. Replacing an English literal with its pt-BR equivalent is the smallest
+change that satisfies the requirement, and it keeps `index.html` readable by
+anyone who opens it, English-speaking colony agents included, since the
+surrounding markup, ids and classes stay in English per `GOAL.md`.
+
+**`<html lang="pt-BR">`.** A screen reader picks its pronunciation rules from
+`lang`; leaving it `en` on a Portuguese interface would mispronounce every
+word it announces, failing the "or hears" half of `GOAL.md`'s requirement.
+
+**`<title>Hoje — A.N.T.F.A.R.M. Diário</title>`.** "A.N.T.F.A.R.M." is the
+colony's own acronym (`README.md`) and stays as-is — initialisms aren't
+translated. "Daily" is not part of that acronym; it is the ordinary English
+word naming the product in `GOAL.md`'s own title, so it becomes "Diário",
+which in Portuguese reads naturally as both "daily" and "journal/planner" —
+a fitting name for this product, and the only way to satisfy "every text a
+person sees … is written in natural pt-BR" for a string the person reads on
+every browser tab.
+
+**Scope: only what `index.html` renders statically.** `#day-eyebrow` and
+`#week-heading` keep pt-BR text in their markup default (`Hoje`, `Esta
+semana`) but `app.js` overwrites both on first render with its own English
+strings (`'Today'`/`'Viewing'`, `'This Week'`/`'Week of …'`); translating
+those call sites is slice 2's job, not this Issue's, per the dependency order
+`GOAL.md` and Issue #25's aborted single-PR attempt established. `main` shows
+a partly-Portuguese interface until slice 2 lands — accepted deliberately
+rather than worked around here, since papering over it would mean touching
+files this Issue was scoped to leave alone.
+
+**Test assertions upgraded from `toBeVisible()` to `toHaveText(...)` with the
+literal pt-BR string**, rather than left as presence-only checks. A
+visibility check would keep passing if the string were accidentally left in
+English or mis-encoded; asserting the literal text is what actually pins the
+translation and catches UTF-8 mangling (`Ã§` for `ç`) as a failure instead of
+a silent pass.
