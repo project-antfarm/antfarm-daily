@@ -654,3 +654,75 @@ read slightly differently in register than their English counterpart
 changes to existing pt-BR strings are explicitly out of scope for this
 Issue, and the two catalogues were written to read naturally in their own
 language rather than to mirror each other's phrasing.
+
+## 2026-09-20 — A deliberate desktop layout above 1024px (Issue #38)
+
+**New breakpoint: `min-width: 1024px`, `.page` grows to `max-width: 1080px`.**
+Not `640px`+1 — the acceptance criteria require `768px` to render at exactly
+today's `640px`-capped width, so the breakpoint has to sit above `768px`.
+`1024px` is also one of the four widths the existing and new no-scroll tests
+already exercise, so the boundary is a width CI already renders rather than
+an untested gap between fixtures. `1080px` sits inside the Issue's suggested
+1000–1200px band: wide enough that two `~490px` panel columns comfortably fit
+a three-word priority and a populated `.add-form` on one row (the two defects
+named in the Issue), narrow enough to still read as a planner rather than a
+dashboard. Below `1024px` nothing in this rule set changes — the existing
+`640px` breakpoint for `.panels`' two-column grid, and everything under it
+from #12/#16/#22, is untouched.
+
+**`main` itself becomes the second grid, at `1024px` and up.** `.panels`
+(Priorities/Tasks/Commitments) already had its own internal two-column grid
+from #16; rather than introduce a wrapper element around Unfinished/Week/
+Upcoming, `main` gets `display: grid; grid-template-columns: 1fr 1fr` and
+`.panels` is pinned to `grid-column: 1 / -1` so it spans both columns as one
+row, unchanged internally. Unfinished and Week then auto-place into the next
+row's two columns in source order, with no `order` property anywhere — DOM
+order and visual order stay identical, so tab order, `main .week-panel`/
+`main .upcoming-panel` landmark checks, and the Priorities-before-Unfinished
+sequencing from #16/#18/#20/#23 all hold without a dedicated test needing to
+know a grid is involved.
+
+**Upcoming spans the full row alone (`grid-column: 1 / -1`); Unfinished and
+Week share the row above it.** Upcoming carries the widest add-form
+(`.deadline-form-fields`: a date input plus a text input) and the deadline
+rows carry a due-date label and an urgency chip beside their text — the
+panel most likely to feel cramped in a half-width column. Unfinished's rows
+are two plain buttons and Week's form is a single text input, both of which
+fit a half-width column with room to spare. This also directly answers the
+Issue's "ragged bottom edge" complaint: three panels of uneven height no
+longer just stack full-width one under another (Commitments already does
+that below Priorities/Tasks); a two-then-one arrangement, with `gap: 20px`
+supplying all inter-row spacing (`margin-top` on those three panels is zeroed
+inside the media query, since the grid gap already produces it), keeps the
+whole lower half from reading as three random-height strips.
+
+**No CSS changed for `.item-text`, the heading, or `.add-form` wrapping
+directly — only the containers around them got wider.** The three-lines
+priority wrap, the `#today-date` line wrap and the button-drops-to-its-own-
+row defects the Issue names were never about the item/heading/form rules
+themselves (those are the same rules #16/#20/#22/#23 already got right at
+`360px`); they were a ~245px column and a ~560px heading width forced by the
+`640px` container. Widening the container and giving `.panels` a genuinely
+wide row is sufficient to fix all three — confirmed by the new tests
+asserting `#today-date` and a three-word priority each render within one
+line-height at `1280px`, and that every `.add-form`'s input and button share
+a row there, in both languages.
+
+**The language switcher moves into the header's grid via `grid-area`, not a
+DOM move.** `.day-header` becomes `display: grid` with a 2-column,
+3-row template (`"top switch" / "heading heading" / "week week"`) at the new
+breakpoint only; `.lang-switch`, `.day-header-top` (holding the eyebrow and
+day-nav, itself untouched), the `h1` and `.week-strip` each get a
+`grid-area`, no markup moved. Below `1024px` `.day-header` stays the plain
+block flow it already was, so the `360px` switcher placement and its
+no-overflow tests from #36 are untouched by construction rather than by
+re-verification. Since nothing sets `order`, DOM/tab order (lang buttons,
+then eyebrow/prev/today/next) is exactly what it was before — pinned by the
+new test that also re-checks the `aria-pressed`/keyboard/accessible-name
+behaviours from #36 pass unchanged with the switcher relocated.
+
+**Evidence.** `screenshots/pt-br-desktop-1280.png`, `screenshots/
+en-us-desktop-1280.png` (already produced by existing tests, now against the
+new CSS) and a new `screenshots/pt-br-tablet-768.png` cover the widths and
+languages the Issue asks for; all are published by the existing
+`browser-evidence-*` CI artifact.

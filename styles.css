@@ -594,3 +594,58 @@ body {
     grid-column: 1 / -1;
   }
 }
+
+@media (min-width: 1024px) {
+  .page {
+    max-width: 1080px;
+  }
+
+  .day-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'top switch'
+      'heading heading'
+      'week week';
+    align-items: center;
+    column-gap: 16px;
+  }
+
+  .day-header-top {
+    grid-area: top;
+  }
+
+  .lang-switch {
+    grid-area: switch;
+    margin-bottom: 0;
+  }
+
+  .day-header h1 {
+    grid-area: heading;
+  }
+
+  .week-strip {
+    grid-area: week;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    gap: 20px;
+  }
+
+  .panels {
+    grid-column: 1 / -1;
+  }
+
+  .unfinished-panel,
+  .week-panel,
+  .upcoming-panel {
+    margin-top: 0;
+  }
+
+  .upcoming-panel {
+    grid-column: 1 / -1;
+  }
+}
