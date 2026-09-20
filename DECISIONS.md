@@ -810,3 +810,68 @@ has no `completed` state — there is nothing coherent for "planned work" or
 "unfinished" to mean for a paragraph of prose — so the right fix is that
 none of the three functions know the field exists, rather than adding an
 `if (list !== 'notes')` guard somewhere.
+
+## 2026-09-20 — Week paging and jump-to-date (Issue #42)
+
+**A week jump selects the same weekday the person was already looking at.**
+`#prev-week`/`#next-week` call `selectDay(addDays(activeDay(), ∓7))` — seven
+days is exactly one week, so the new day is automatically in the target week
+at the same weekday position (a Wednesday pages to the preceding
+Wednesday). No new date arithmetic: `addDays` (#12) already does this, and
+`selectDay` already re-derives `weekStart`/`weekKeys` from whatever day it's
+given, so the strip, the week panel and the heading agree without any of
+them needing to know a "week jump" happened versus an ordinary day change.
+Landing on the same weekday rather than, say, the target week's Monday keeps
+the mental model of paging a week identical to paging a day: only the
+reference day moves, everything else (which day is selected relative to its
+week) stays put.
+
+**The controls sit as two new rows in the existing header, not inside
+`.week-strip` or `.day-nav`.** `#prev-week`/`#next-week` wrap the existing
+`#week-strip` in a new `.week-nav` flex row (`« [seven day buttons] »`),
+reusing the `.day-nav-btn` class so they share `#prev-day`/`#next-day`'s
+size, border and focus treatment for free. The date input gets its own
+`.day-jump` row directly below. Both were kept out of `.day-header-top`
+(the eyebrow + day-nav row): that row is already the tightest one in the
+header at `360px`, and wrapping a third control group into a `flex` row
+with `justify-content: space-between` risked exactly the overflow the Issue
+asks CI to keep proving absent. As their own rows, mobile gets them for
+free from plain block flow (no CSS needed below `1024px`); the `1024px`+
+grid from #38 gains a fourth template row (`'jump jump'` under `'week
+week'`, both spanning both columns) and `.week-nav`/`.day-jump` take over
+the `grid-area: week`/new `grid-area: jump` that `.week-strip` alone used
+to hold — `.day-header-top`, `.lang-switch` and the `h1`'s areas, and the
+`#38` tests pinned to them (the switch/day-nav band overlap, DOM/tab order),
+are untouched.
+
+**The date input's value is set from `render()`, the single place every
+navigation path already converges on.** `render()` (called by `selectDay`,
+language switch, and boot) now also does `jumpDateInput.value = key` where
+`key` is the day just resolved by `activeDay()` — so prev/next day, prev/next
+week, a week-strip click, `#today-btn` and the jump input's own `change`
+handler all leave the field showing the day actually being viewed, with no
+per-control code duplicating that sync. A `change` listener on the input
+itself calls `selectDay(value)` only when `value` is non-empty and passes
+`state.js`'s `isValidDateKey` (exported for this reuse — it already existed
+to validate a deadline's due date and is the exact "well-formed `YYYY-MM-DD`
+that round-trips through a real calendar date" check a manually-typed or
+picker-cleared value needs). An empty or invalid value instead resets
+`jumpDateInput.value` back to `activeDay()` and returns without touching
+`state` or calling `selectDay` — a no-op that still leaves the field
+reading "where am I" rather than sitting blank or on a rejected date.
+
+**A native `<input type="date">`, for the same reason #28 gave the deadline
+due-date field.** Its calendar affordance, keyboard support and locale-
+correct chrome all come free of both a dependency and hand-rolled a11y work;
+the app already accepts that this widget's calendar icon and popup styling
+follow the browser rather than the app's own palette (#12's constraint),
+so a second date field introduces no new inconsistency. A custom picker
+would need to duplicate all of that to meet the Issue's own accessibility
+and keyboard criteria, for a control used briefly and occasionally rather
+than read continuously.
+
+**Evidence.** `screenshots/week-nav-mobile-360.png`, `screenshots/
+week-nav-desktop-1280.png` and `screenshots/week-nav-past-week-1280.png`
+(header with both new controls at 360px and 1280px, and 1280px after paging
+one week back) are captured by the new tests and published by the existing
+`browser-evidence-*` CI artifact.
