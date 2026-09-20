@@ -248,7 +248,7 @@ export function removeGoal(state, weekKey, id) {
 // A deadline is not tied to any single day, so it lives at the top level
 // (`state.deadlines`) rather than under `days[key]` — the same reasoning
 // #12 anticipated and #18 followed for week goals.
-function isValidDateKey(key) {
+export function isValidDateKey(key) {
   if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
   return todayKey(parseKey(key)) === key;
 }

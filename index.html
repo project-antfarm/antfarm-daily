@@ -22,7 +22,15 @@
       </div>
     </div>
     <h1 id="today-date"></h1>
-    <div class="week-strip" id="week-strip" role="group" data-i18n-aria-label="weekStrip"></div>
+    <div class="week-nav">
+      <button type="button" id="prev-week" class="day-nav-btn" data-i18n-aria-label="prevWeek">«</button>
+      <div class="week-strip" id="week-strip" role="group" data-i18n-aria-label="weekStrip"></div>
+      <button type="button" id="next-week" class="day-nav-btn" data-i18n-aria-label="nextWeek">»</button>
+    </div>
+    <div class="day-jump">
+      <label class="sr-only" for="jump-date-input" data-i18n="jumpDateLabel"></label>
+      <input type="date" id="jump-date-input" class="day-jump-input">
+    </div>
   </header>
 
   <main>

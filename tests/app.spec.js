@@ -140,6 +140,9 @@ test('day navigation and the week strip expose non-empty pt-BR aria-labels', asy
   await expect(page.locator('#today-btn')).toHaveAccessibleName('Hoje');
   await expect(page.locator('#next-day')).toHaveAccessibleName('Próximo dia');
   await expect(page.locator('#week-strip')).toHaveAccessibleName('Semana');
+  await expect(page.locator('#prev-week')).toHaveAccessibleName('Semana anterior');
+  await expect(page.locator('#next-week')).toHaveAccessibleName('Próxima semana');
+  await expect(page.locator('#jump-date-input')).toHaveAccessibleName('Ir para uma data');
 });
 
 test('empty state shows a human-readable date with no console errors', async ({ page }) => {
@@ -2096,5 +2099,211 @@ test.describe('a deliberate desktop layout above 1024px (Issue #38)', () => {
     expect(order[3]).toContain('unfinished-panel');
     expect(order[4]).toContain('week-panel');
     expect(order[5]).toContain('upcoming-panel');
+  });
+});
+
+// A fixed Wednesday so every date and weekday assertion below is exact
+// rather than relative. Monday-start week: Sep 14 (Mon) – Sep 20 (Sun) 2026;
+// the preceding week is Sep 7 (Mon) – Sep 13 (Sun).
+test.describe('week paging and jump-to-date (Issue #42)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-09-16T09:00:00') }); // Wednesday
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+  });
+
+  test('previous-week shows the preceding week with the same weekday selected; next-week returns to the original week and day', async ({
+    page,
+  }) => {
+    const originalNums = await page.locator('.week-day-num').allTextContents();
+    expect(originalNums).toEqual(['14', '15', '16', '17', '18', '19', '20']);
+
+    await page.locator('#prev-week').click();
+
+    expect(await page.locator('.week-day-num').allTextContents()).toEqual(['7', '8', '9', '10', '11', '12', '13']);
+    await expect(page.locator('.week-day.is-selected .week-day-num')).toHaveText('9');
+    await expect(page.locator('#day-eyebrow')).toHaveText('Visualizando');
+
+    await page.locator('#next-week').click();
+
+    expect(await page.locator('.week-day-num').allTextContents()).toEqual(originalNums);
+    await expect(page.locator('.week-day.is-selected .week-day-num')).toHaveText('16');
+    await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
+  });
+
+  test('the week heading, week goals and week progress all describe the week being paged to, not the current week', async ({
+    page,
+  }) => {
+    await addGoal(page, 'Goal for the current week');
+
+    await page.locator('#prev-week').click();
+
+    await expect(page.locator('#week-heading')).toHaveText('Semana de 07/09/2026');
+    await expect(page.locator('#week-goals-list .item')).toHaveCount(0);
+    await expect(page.locator('#week-goals-empty')).toBeVisible();
+    await expect(page.locator('#week-progress-text')).toHaveText('Nenhum trabalho planejado ainda esta semana.');
+
+    await addItem(page, 'task', 'Task in the past week');
+    await page.locator('#tasks-list .item-toggle').click();
+    await expect(page.locator('#week-progress-text')).toHaveText('1 de 1 concluído esta semana');
+
+    await page.locator('#next-week').click();
+
+    await expect(page.locator('#week-heading')).toHaveText('Esta semana');
+    await expect(page.locator('#week-goals-list .item')).toHaveCount(1);
+  });
+
+  test('jumping to a date 40+ days in the past renders that day fully: heading, week strip and its own content', async ({
+    page,
+  }) => {
+    const key = '2026-08-02'; // Sunday, 45 days before the fixed "today" above
+    await page.evaluate((k) => {
+      localStorage.setItem(
+        'antfarm.daily.v1',
+        JSON.stringify({
+          version: 1,
+          days: {
+            [k]: {
+              priorities: [{ id: 'p1', text: 'Seeded priority', completed: false }],
+              tasks: [{ id: 't1', text: 'Seeded task', completed: false }],
+              commitments: [{ id: 'c1', text: 'Seeded commitment', time: '09:00', completed: false }],
+              notes: 'Seeded note',
+            },
+          },
+        })
+      );
+    }, key);
+    await page.reload();
+
+    await page.locator('#jump-date-input').fill(key);
+    await page.locator('#jump-date-input').blur();
+
+    await expect(page.locator('#day-eyebrow')).toHaveText('Visualizando');
+    await expect(page.locator('#today-date')).toHaveText('domingo, 2 de agosto de 2026');
+    expect(await page.locator('.week-day-num').allTextContents()).toEqual(['27', '28', '29', '30', '31', '1', '2']);
+    await expect(page.locator('.week-day.is-selected .week-day-num')).toHaveText('2');
+    await expect(page.locator('#priorities-list .item-text')).toHaveText('Seeded priority');
+    await expect(page.locator('#tasks-list .item-text')).toHaveText('Seeded task');
+    await expect(page.locator('#commitments-list .item-text')).toHaveText('Seeded commitment');
+    await expect(page.locator('#notes-input')).toHaveValue('Seeded note');
+  });
+
+  test('the date input mirrors the selected day after every kind of navigation, and clearing it is a no-op', async ({
+    page,
+  }) => {
+    await expect(page.locator('#jump-date-input')).toHaveValue('2026-09-16');
+
+    await page.locator('#prev-day').click();
+    await expect(page.locator('#jump-date-input')).toHaveValue('2026-09-15');
+
+    await page.locator('#next-day').click();
+    await expect(page.locator('#jump-date-input')).toHaveValue('2026-09-16');
+
+    await page.locator('#prev-week').click();
+    await expect(page.locator('#jump-date-input')).toHaveValue('2026-09-09');
+
+    await page.locator('#next-week').click();
+    await expect(page.locator('#jump-date-input')).toHaveValue('2026-09-16');
+
+    await page.locator('.week-day').first().click(); // Monday, Sep 14
+    await expect(page.locator('#jump-date-input')).toHaveValue('2026-09-14');
+
+    await page.locator('#today-btn').click();
+    await expect(page.locator('#jump-date-input')).toHaveValue('2026-09-16');
+
+    await page.locator('#jump-date-input').fill('');
+    await page.locator('#jump-date-input').blur();
+    await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
+    await expect(page.locator('#jump-date-input')).toHaveValue('2026-09-16');
+  });
+
+  test('paging to another week and back to today resumes real-today following (Issue #14)', async ({ page }) => {
+    await page.locator('#prev-week').click();
+    await expect(page.locator('#day-eyebrow')).toHaveText('Visualizando');
+
+    await page.locator('#today-btn').click();
+
+    await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
+  });
+
+  test('a past week shows the has-work marker for a day with content and none for a note-only day, once that week is displayed', async ({
+    page,
+  }) => {
+    await page.locator('#prev-week').click(); // Sep 9, Wednesday, in the Sep 7–13 week
+    await addItem(page, 'task', 'Work in the past week');
+    await expect(page.locator('.week-day.is-selected')).toHaveClass(/has-work/);
+
+    await page.locator('#next-day').click(); // Sep 10, Thursday, same past week
+    await setNote(page, 'Just a note, no work');
+    await expect(page.locator('.week-day.is-selected')).not.toHaveClass(/has-work/);
+
+    await page.reload();
+    await page.locator('#prev-week').click();
+
+    await expect(page.locator('.week-day').nth(2)).toHaveClass(/has-work/); // Sep 9
+    await expect(page.locator('.week-day').nth(3)).not.toHaveClass(/has-work/); // Sep 10, note-only
+  });
+
+  test('the week-paging controls and the jump-to-date label switch language at runtime, with directional accessible names', async ({
+    page,
+  }) => {
+    await expect(page.locator('#prev-week')).toHaveAccessibleName('Semana anterior');
+    await expect(page.locator('#next-week')).toHaveAccessibleName('Próxima semana');
+    await expect(page.locator('#jump-date-input')).toHaveAccessibleName('Ir para uma data');
+
+    await page.locator('#lang-en-btn').click();
+
+    await expect(page.locator('#prev-week')).toHaveAccessibleName('Previous week');
+    await expect(page.locator('#next-week')).toHaveAccessibleName('Next week');
+    await expect(page.locator('#jump-date-input')).toHaveAccessibleName('Jump to a date');
+  });
+
+  test('the week controls and date input are keyboard-operable with the same visible focus treatment as existing controls', async ({
+    page,
+  }) => {
+    await page.locator('#prev-week').focus();
+    let outline = await page.locator('#prev-week').evaluate((el) => getComputedStyle(el).outlineStyle);
+    expect(outline).not.toBe('none');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#day-eyebrow')).toHaveText('Visualizando');
+
+    await page.locator('#next-week').focus();
+    outline = await page.locator('#next-week').evaluate((el) => getComputedStyle(el).outlineStyle);
+    expect(outline).not.toBe('none');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#day-eyebrow')).toHaveText('Hoje');
+
+    await page.locator('#jump-date-input').focus();
+    outline = await page.locator('#jump-date-input').evaluate((el) => getComputedStyle(el).outlineStyle);
+    expect(outline).not.toBe('none');
+  });
+
+  test('no horizontal scroll at 360px, 768px, 1024px and 1280px with the week-paging controls and date input present', async ({
+    page,
+  }) => {
+    for (const width of [360, 768, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const fits = await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      );
+      expect(fits).toBe(true);
+    }
+  });
+
+  test('captures screenshots of the header with week paging and jump-to-date at 360px and 1280px, and a past week at 1280px', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/week-nav-mobile-360.png' });
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/week-nav-desktop-1280.png' });
+
+    await page.locator('#prev-week').click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/week-nav-past-week-1280.png' });
   });
 });
