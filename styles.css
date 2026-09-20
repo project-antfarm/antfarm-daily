@@ -197,12 +197,33 @@ body {
   gap: 20px;
 }
 
-.panel {
+.panel,
+.notes-panel {
   min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
+}
+
+.notes-panel {
+  margin-top: 20px;
+  border-top: 4px solid var(--muted);
+}
+
+.notes-textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+  overflow-wrap: anywhere;
 }
 
 .priorities-panel {
@@ -639,12 +660,14 @@ body {
     grid-column: 1 / -1;
   }
 
+  .notes-panel,
   .unfinished-panel,
   .week-panel,
   .upcoming-panel {
     margin-top: 0;
   }
 
+  .notes-panel,
   .upcoming-panel {
     grid-column: 1 / -1;
   }

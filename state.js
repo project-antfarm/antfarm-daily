@@ -5,6 +5,10 @@ import { t } from './i18n.js';
 export const STORAGE_KEY = 'antfarm.daily.v1';
 export const MAX_PRIORITIES = 3;
 export const LISTS = ['priorities', 'tasks', 'commitments'];
+// Far above the 140-char list-item cap (notes are prose, not a title) but
+// still short enough to stay a day's context rather than a document — see
+// DECISIONS.md.
+export const MAX_NOTE_LENGTH = 2000;
 
 export function todayKey(date = new Date()) {
   const y = date.getFullYear();
@@ -44,7 +48,7 @@ export function dayHasWork(day) {
 }
 
 function emptyDay() {
-  return { priorities: [], tasks: [], commitments: [] };
+  return { priorities: [], tasks: [], commitments: [], notes: '' };
 }
 
 function emptyWeek() {
@@ -68,6 +72,7 @@ export function getDay(state, key) {
     priorities: day.priorities ?? [],
     tasks: day.tasks ?? [],
     commitments: sortByTime(day.commitments ?? []),
+    notes: day.notes ?? '',
   };
 }
 
@@ -131,6 +136,16 @@ export function addItem(state, key, list, text, time) {
   if (list === 'commitments') item.time = time;
   const nextDay = { ...day, [list]: [...day[list], item] };
   return { state: withDay(state, key, nextDay), error: null };
+}
+
+// Notes are free-text prose, not a list item, so unlike addItem/toggleItem/
+// removeItem this is a single setter rather than an id-addressed collection.
+// Not trimmed: mid-typing whitespace (a trailing space, a blank line) is the
+// author's, not a stray to clean up the way a submitted list item's is.
+export function setNote(state, key, text) {
+  const day = getDay(state, key);
+  const nextDay = { ...day, notes: text.slice(0, MAX_NOTE_LENGTH) };
+  return withDay(state, key, nextDay);
 }
 
 export function toggleItem(state, key, list, id) {

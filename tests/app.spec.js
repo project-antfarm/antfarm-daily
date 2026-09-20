@@ -30,6 +30,14 @@ async function addDeadline(page, text, due) {
   await input.press('Enter');
 }
 
+// Notes commit on blur (see DECISIONS.md), not on a submit key, so every
+// caller blurs explicitly rather than relying on the debounce timer.
+async function setNote(page, text) {
+  const textarea = page.locator('#notes-input');
+  await textarea.fill(text);
+  await textarea.blur();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
@@ -1046,6 +1054,192 @@ test('captures screenshots of a day with priorities, tasks and two commitments',
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/commitments-desktop-1280.png' });
+});
+
+test.describe('Notes (Issue #40)', () => {
+  test('a note is written and survives a reload', async ({ page }) => {
+    await setNote(page, 'Called in sick, rescheduled the demo.');
+    await page.reload();
+    await expect(page.locator('#notes-input')).toHaveValue('Called in sick, rescheduled the demo.');
+  });
+
+  test('a written note is present in the stored payload under the day it was written on', async ({ page }) => {
+    await setNote(page, 'Payload check');
+    const key = await page.evaluate(() => new Date().toISOString().slice(0, 10));
+    const stored = await page.evaluate(
+      ([storedKey]) => JSON.parse(localStorage.getItem('antfarm.daily.v1')).days[storedKey].notes,
+      [key]
+    );
+    expect(stored).toBe('Payload check');
+  });
+
+  test('a note is scoped to the day it was written on, absent on another day, and returns on navigating back, surviving a reload', async ({
+    page,
+  }) => {
+    await setNote(page, "Today's note");
+    await page.locator('#prev-day').click();
+    await expect(page.locator('#notes-input')).toHaveValue('');
+
+    await setNote(page, "Yesterday's note");
+    await page.locator('#today-btn').click();
+    await expect(page.locator('#notes-input')).toHaveValue("Today's note");
+
+    await page.locator('#prev-day').click();
+    await expect(page.locator('#notes-input')).toHaveValue("Yesterday's note");
+
+    // A reload always reopens on today (selectedDay is in-memory only, not
+    // part of what's persisted) — so today's note is what should show first.
+    await page.reload();
+    await expect(page.locator('#notes-input')).toHaveValue("Today's note");
+    await page.locator('#prev-day').click();
+    await expect(page.locator('#notes-input')).toHaveValue("Yesterday's note");
+  });
+
+  test('clearing a note and reloading shows an empty field, not the old text', async ({ page }) => {
+    await setNote(page, 'Temporary note');
+    await page.reload();
+    await expect(page.locator('#notes-input')).toHaveValue('Temporary note');
+
+    const textarea = page.locator('#notes-input');
+    await textarea.selectText();
+    await page.keyboard.press('Backspace');
+    await textarea.blur();
+
+    await page.reload();
+    await expect(page.locator('#notes-input')).toHaveValue('');
+  });
+
+  test('a day whose only content is a note carries no week-strip work marker, leaves week progress unchanged, and contributes nothing to Unfinished', async ({
+    page,
+  }) => {
+    const progressBefore = await page.locator('#week-progress-text').innerText();
+    const todayStrip = page.locator('.week-day.is-selected');
+    await expect(todayStrip).not.toHaveClass(/has-work/);
+
+    await setNote(page, 'Just some context, nothing planned.');
+
+    await expect(todayStrip).not.toHaveClass(/has-work/);
+    await expect(page.locator('#week-progress-text')).toHaveText(progressBefore);
+
+    await page.locator('#next-day').click();
+    await expect(page.locator('#unfinished-summary')).toHaveText('Nada pendente — você está em dia.');
+    await expect(page.locator('#unfinished-list .unfinished-row')).toHaveCount(0);
+  });
+
+  test('a day stored by the previous version (no notes key) still loads and renders an empty notes field with its items intact', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const key = new Date().toISOString().slice(0, 10);
+      localStorage.setItem(
+        'antfarm.daily.v1',
+        JSON.stringify({
+          version: 1,
+          days: {
+            [key]: {
+              priorities: [{ id: 'p1', text: 'Old priority', completed: false }],
+              tasks: [{ id: 't1', text: 'Old task', completed: false }],
+              commitments: [{ id: 'c1', text: 'Old commitment', time: '09:00', completed: false }],
+            },
+          },
+        })
+      );
+    });
+
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e));
+    await page.reload();
+
+    await expect(page.locator('#priorities-list .item')).toHaveCount(1);
+    await expect(page.locator('#tasks-list .item')).toHaveCount(1);
+    await expect(page.locator('#commitments-list .item')).toHaveCount(1);
+    await expect(page.locator('#notes-input')).toHaveValue('');
+    expect(errors).toHaveLength(0);
+
+    await setNote(page, 'Newly added note');
+    await page.reload();
+    await expect(page.locator('#notes-input')).toHaveValue('Newly added note');
+  });
+
+  test('the notes heading, accessible name and placeholder are in pt-BR, and switch to English at runtime without a reload', async ({
+    page,
+  }) => {
+    await expect(page.locator('#notes-heading')).toHaveText('Notas');
+    await expect(page.locator('#notes-input')).toHaveAccessibleName('Notas do dia');
+    await expect(page.locator('#notes-input')).toHaveAttribute('placeholder', 'Algum contexto sobre este dia…');
+
+    await page.locator('#lang-en-btn').click();
+
+    await expect(page.locator('#notes-heading')).toHaveText('Notes');
+    await expect(page.locator('#notes-input')).toHaveAccessibleName('Notes for the day');
+    await expect(page.locator('#notes-input')).toHaveAttribute('placeholder', 'Any context about this day…');
+  });
+
+  test('the notes field is keyboard-reachable, editable, and shows the same focus treatment as other controls', async ({
+    page,
+  }) => {
+    const textarea = page.locator('#notes-input');
+    await textarea.focus();
+    const outline = await textarea.evaluate((el) => getComputedStyle(el).outlineStyle);
+    expect(outline).not.toBe('none');
+
+    await page.keyboard.type('Typed via keyboard');
+    await expect(textarea).toHaveValue('Typed via keyboard');
+  });
+
+  test('a ~1500-character note with a single unbroken 60-character run causes no horizontal scroll at 360px or 1280px', async ({
+    page,
+  }) => {
+    const longWord = 'x'.repeat(60);
+    const filler = 'lorem ipsum dolor sit amet consectetur adipiscing elit '.repeat(30);
+    const note = `${longWord} ${filler}`.slice(0, 1500);
+    expect(note.length).toBe(1500);
+
+    await setNote(page, note);
+
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const fits = await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      );
+      expect(fits).toBe(true);
+    }
+  });
+
+  test('the notes area sits directly after Priorities/Tasks/Commitments and before Unfinished, Week and Upcoming, at 360px and 1280px', async ({
+    page,
+  }) => {
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const order = await page.evaluate(() => Array.from(document.querySelectorAll('main > *')).map((el) => el.className));
+      expect(order[0]).toContain('panels');
+      expect(order[1]).toContain('notes-panel');
+      expect(order[2]).toContain('unfinished-panel');
+      expect(order[3]).toContain('week-panel');
+      expect(order[4]).toContain('upcoming-panel');
+    }
+  });
+
+  test('captures screenshots of a fully populated day with a multi-line note at mobile and desktop widths, and in English', async ({
+    page,
+  }) => {
+    await addItem(page, 'priority', 'Ship the notes feature');
+    await addItem(page, 'task', 'Review open issues');
+    await addCommitment(page, 'Standup', '09:00');
+    await setNote(page, 'Linha um: contexto do dia.\nLinha dois: mais contexto.\nLinha três: até mais.');
+
+    await page.setViewportSize({ width: 360, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/notes-pt-br-mobile-360.png' });
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/notes-pt-br-desktop-1280.png' });
+
+    await page.locator('#lang-en-btn').click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/notes-en-desktop-1280.png' });
+  });
 });
 
 test('adds a week goal and it survives a reload', async ({ page }) => {
