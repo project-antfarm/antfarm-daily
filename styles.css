@@ -50,6 +50,36 @@ body {
   margin-bottom: 28px;
 }
 
+.lang-switch {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.lang-btn {
+  min-width: 36px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.lang-btn:hover {
+  background: var(--bg);
+}
+
+.lang-btn[aria-pressed="true"] {
+  border-width: 2px;
+  border-color: var(--accent-text);
+  background: var(--bg);
+}
+
 .day-header-top {
   display: flex;
   align-items: flex-start;

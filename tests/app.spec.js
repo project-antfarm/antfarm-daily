@@ -36,19 +36,64 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
+// Checks page text, every aria-label, every placeholder and the document
+// title for leftover words from the *other* language's catalogue — a plain
+// body.innerText scan misses attributes, which is exactly where a
+// half-translated string hides.
+async function assertNoLeftoverWords(page, words) {
+  const haystacks = await page.evaluate(() => ({
+    text: document.body.innerText,
+    ariaLabels: Array.from(document.querySelectorAll('[aria-label]')).map((el) => el.getAttribute('aria-label')),
+    placeholders: Array.from(document.querySelectorAll('[placeholder]')).map((el) => el.getAttribute('placeholder')),
+    title: document.title,
+  }));
+  const all = [haystacks.text, haystacks.title, ...haystacks.ariaLabels, ...haystacks.placeholders].join('\n');
+  for (const word of words) {
+    expect(all).not.toMatch(new RegExp(`\\b${word}\\b`, 'i'));
+  }
+}
+
 test('the page lang and title are pt-BR', async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.lang)).toBe('pt-BR');
   await expect(page).toHaveTitle('Hoje — A.N.T.F.A.R.M. Diário');
 });
 
-test('the i18n catalogue has no missing or empty string', async ({ page }) => {
+test('neither catalogue has a missing or empty string', async ({ page }) => {
   const badKeys = await page.evaluate(async () => {
-    const { strings } = await import('/i18n.js');
-    return Object.entries(strings)
-      .filter(([, value]) => typeof value !== 'string' || value.trim() === '')
-      .map(([key]) => key);
+    const { catalogues } = await import('/i18n.js');
+    return Object.entries(catalogues).flatMap(([lang, strings]) =>
+      Object.entries(strings)
+        .filter(([, value]) => typeof value !== 'string' || value.trim() === '')
+        .map(([key]) => `${lang}:${key}`)
+    );
   });
   expect(badKeys).toEqual([]);
+});
+
+test('the pt-BR and English catalogues have identical key sets', async ({ page }) => {
+  const { ptKeys, enKeys } = await page.evaluate(async () => {
+    const { catalogues } = await import('/i18n.js');
+    return {
+      ptKeys: Object.keys(catalogues['pt-BR']).sort(),
+      enKeys: Object.keys(catalogues['en-US']).sort(),
+    };
+  });
+  expect(enKeys).toEqual(ptKeys);
+});
+
+test('t() fails loudly on a key missing from the active catalogue, instead of rendering undefined', async ({
+  page,
+}) => {
+  const threw = await page.evaluate(async () => {
+    const { t } = await import('/i18n.js');
+    try {
+      t('thisKeyDoesNotExist');
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  expect(threw).toBe(true);
 });
 
 test('panel headings and the priorities hint are in pt-BR', async ({ page }) => {
@@ -410,8 +455,7 @@ test.describe('pt-BR dates render regardless of the browser locale', () => {
 
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('pt-BR');
 
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    const englishWords = [
+    await assertNoLeftoverWords(page, [
       'Today',
       'Tasks',
       'Priorities',
@@ -424,15 +468,327 @@ test.describe('pt-BR dates render regardless of the browser locale', () => {
       'Yesterday',
       'September',
       'Friday',
-    ];
-    for (const word of englishWords) {
-      expect(bodyText).not.toMatch(new RegExp(`\\b${word}\\b`, 'i'));
-    }
+    ]);
   });
 
-  test('the i18n module locale is pt-BR, not derived from the browser locale', async ({ page }) => {
-    const locale = await page.evaluate(async () => (await import('/i18n.js')).LOCALE);
-    expect(locale).toBe('pt-BR');
+  test('the active language is pt-BR by default, not derived from the browser locale', async ({ page }) => {
+    const lang = await page.evaluate(async () => (await import('/i18n.js')).getLang());
+    expect(lang).toBe('pt-BR');
+  });
+});
+
+// The mirror of the block above: the browser context's own locale is forced
+// to pt-BR, so a passing English assertion here proves the English rendering
+// comes from activating the switcher, not from a coincidentally-English
+// browser.
+test.describe('English interface via the language switcher', () => {
+  test.use({ locale: 'pt-BR' });
+
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-09-18T09:00:00') }); // Friday
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+  });
+
+  test('activating EN renders every panel heading, empty state, placeholder, accessible name and validation message in English, with no reload', async ({
+    page,
+  }) => {
+    await page.locator('#lang-en-btn').click();
+
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('en-US');
+    await expect(page).toHaveTitle('Today — A.N.T.F.A.R.M. Daily');
+
+    await expect(page.locator('#priorities-heading')).toHaveText('Priorities');
+    await expect(page.locator('.panel-hint')).toHaveText('Up to 3');
+    await expect(page.locator('#tasks-heading')).toHaveText('Tasks');
+    await expect(page.locator('#commitments-heading')).toHaveText('Commitments');
+    await expect(page.locator('#unfinished-heading')).toHaveText('Unfinished');
+    await expect(page.locator('#week-goals-heading')).toHaveText('Goals');
+    await expect(page.locator('#upcoming-heading')).toHaveText('Upcoming deadlines');
+    await expect(page.locator('#week-heading')).toHaveText('This week');
+
+    await expect(page.locator('#priorities-empty')).toHaveText('No priorities yet — what matters most today?');
+    await expect(page.locator('#tasks-empty')).toHaveText('No tasks yet — add what needs doing most.');
+    await expect(page.locator('#commitments-empty')).toHaveText('No commitments scheduled yet.');
+    await expect(page.locator('#week-goals-empty')).toHaveText('No goals yet — what do you want from this week?');
+    await expect(page.locator('#deadlines-empty')).toHaveText('No deadlines yet — add something with a due date.');
+    await expect(page.locator('#unfinished-summary')).toHaveText("Nothing pending — you're all caught up.");
+    await expect(page.locator('#week-progress-text')).toHaveText('No work planned yet this week.');
+    await expect(page.locator('#deadlines-summary')).toHaveText('No deadlines yet.');
+
+    await expect(page.locator('#priority-input')).toHaveAccessibleName('Add a priority');
+    await expect(page.locator('#priority-input')).toHaveAttribute('placeholder', 'Add a priority…');
+    await expect(page.locator('#task-input')).toHaveAccessibleName('Add a task');
+    await expect(page.locator('#task-input')).toHaveAttribute('placeholder', 'Add a task…');
+    await expect(page.locator('#commitment-time-input')).toHaveAccessibleName('Commitment time');
+    await expect(page.locator('#commitment-input')).toHaveAccessibleName('Add a commitment');
+    await expect(page.locator('#commitment-input')).toHaveAttribute('placeholder', 'Add a commitment…');
+    await expect(page.locator('#goal-input')).toHaveAccessibleName('Add a goal for the week');
+    await expect(page.locator('#goal-input')).toHaveAttribute('placeholder', 'Add a goal for the week…');
+    await expect(page.locator('#deadline-input')).toHaveAccessibleName('Add a deadline');
+    await expect(page.locator('#deadline-input')).toHaveAttribute('placeholder', 'Add a deadline…');
+    await expect(page.locator('#deadline-due-input')).toHaveAccessibleName('Due date');
+
+    await expect(page.locator('#prev-day')).toHaveAccessibleName('Previous day');
+    await expect(page.locator('#today-btn')).toHaveAccessibleName('Today');
+    await expect(page.locator('#next-day')).toHaveAccessibleName('Next day');
+    await expect(page.locator('#week-strip')).toHaveAccessibleName('Week');
+
+    // Validation messages only appear after a failed submit, and render() (run
+    // by the switch itself) always resets them hidden — so they're triggered
+    // after switching, to prove the message text itself is in English.
+    await page.locator('#commitment-input').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#commitment-msg')).toHaveText('A commitment needs a time and a description.');
+
+    await page.locator('#goal-input').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#goal-msg')).toHaveText('A goal needs some text.');
+
+    await page.locator('#deadline-input').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#deadline-msg')).toHaveText('A deadline needs text and a valid due date.');
+
+    await addItem(page, 'priority', 'One');
+    await addItem(page, 'priority', 'Two');
+    await addItem(page, 'priority', 'Three');
+    await expect(page.locator('#priority-limit-msg')).toHaveText(
+      'You already have 3 priorities today. Finish or remove one first.'
+    );
+    await expect(page.locator('#priority-input')).toBeDisabled();
+  });
+
+  test('activating EN translates item delete, completion status, and the Unfinished panel buttons and aria-labels', async ({
+    page,
+  }) => {
+    await page.locator('#prev-day').click();
+    await addItem(page, 'task', 'Left unfinished');
+    await page.locator('#today-btn').click();
+
+    await addItem(page, 'task', 'Water the plants');
+    await page.locator('#lang-en-btn').click();
+
+    const item = page.locator('#tasks-list .item').first();
+    await expect(item.locator('.sr-only')).toHaveText('(not completed)');
+    await item.locator('.item-toggle').click();
+    await expect(item.locator('.sr-only')).toHaveText('(completed)');
+
+    await expect(page.locator('#tasks-list .item-delete')).toHaveAccessibleName('Delete "Water the plants"');
+    page.once('dialog', (dialog) => {
+      expect(dialog.message()).toBe('Delete "Water the plants"? This action cannot be undone.');
+      dialog.dismiss();
+    });
+    await page.locator('#tasks-list .item-delete').click();
+
+    const completeBtn = page.locator('#unfinished-list .unfinished-complete');
+    const moveBtn = page.locator('#unfinished-list .unfinished-move');
+    await expect(completeBtn).toHaveText('Finish');
+    await expect(moveBtn).toHaveText('Bring to this day');
+    await expect(completeBtn).toHaveAccessibleName('Finish "Left unfinished" from Yesterday');
+    await expect(moveBtn).toHaveAccessibleName('Bring "Left unfinished" from Yesterday to this day');
+    await expect(page.locator('#unfinished-summary')).toHaveText('1 item pending from previous days.');
+  });
+
+  test('activating EN translates the week progress line, deadline urgency labels, the deadlines summary and week-strip aria-labels', async ({
+    page,
+  }) => {
+    await addItem(page, 'task', 'Write the tests');
+    await addDeadline(page, 'Renew certificate', '2026-09-01'); // overdue relative to Sep 18
+    await page.locator('#lang-en-btn').click();
+
+    await expect(page.locator('#week-progress-text')).toHaveText('0 of 1 done this week');
+    await expect(page.locator('#deadlines-list .item-urgency')).toHaveText('Overdue');
+    await expect(page.locator('#deadlines-summary')).toContainText('1 overdue');
+
+    const saturday = page.locator('.week-day').nth(5); // Monday-start week: Mon=0 ... Sat=5
+    await expect(saturday.locator('.week-day-label')).toHaveText('Sat');
+    await expect(saturday).toHaveAccessibleName(/^Saturday, September 19(?:,|$)/);
+
+    const friday = page.locator('.week-day.is-selected'); // today, Sep 18
+    await expect(friday).toHaveAccessibleName(/^Friday, September 18, today/);
+  });
+
+  test('an English day shows no pt-BR word from the catalogue in text, aria-labels, placeholders or the title', async ({
+    page,
+  }) => {
+    await page.locator('#lang-en-btn').click();
+
+    await page.locator('#prev-day').click();
+    await addItem(page, 'task', 'Leftover from before');
+    await page.locator('#today-btn').click();
+
+    await addItem(page, 'priority', 'Ship the English catalogue');
+    await addItem(page, 'task', 'Review the guard test');
+    await addCommitment(page, 'Standup', '09:00');
+    await addGoal(page, 'Close out slice 4');
+    await addDeadline(page, 'Renew certificate', '2026-09-01'); // overdue
+
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('en-US');
+
+    await assertNoLeftoverWords(page, [
+      'Hoje',
+      'Tarefas',
+      'Prioridades',
+      'Compromissos',
+      'Pendências',
+      'Adicionar',
+      'Excluir',
+      'Semana',
+      'Atrasado',
+      'Ontem',
+      'setembro',
+      'sexta-feira',
+    ]);
+  });
+
+  test('dates follow the EN selection: a natural long date, a US numeric due date, and English weekday abbreviations', async ({
+    page,
+  }) => {
+    await page.locator('#lang-en-btn').click();
+
+    await expect(page.locator('#today-date')).toHaveText('Friday, September 18, 2026');
+
+    await addDeadline(page, 'Renew passport', '2026-03-05');
+    await expect(page.locator('#deadlines-list .item-due')).toHaveText('03/05/2026');
+
+    const labels = page.locator('.week-day-label');
+    const texts = await labels.allTextContents();
+    expect(new Set(texts).size).toBe(7);
+    expect(texts).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+
+    for (let i = 0; i < 3; i++) await page.locator('#prev-day').click(); // Tuesday, Sep 15
+    await addItem(page, 'task', 'From three days back');
+    await page.locator('#today-btn').click();
+    await expect(page.locator('#unfinished-list .unfinished-origin')).toHaveText('Tue, Sep 15');
+  });
+
+  test('the language choice persists across a reload, in a fresh context sharing storage, and falls back to pt-BR from a corrupt value', async ({
+    page,
+    context,
+    browser,
+  }) => {
+    await page.locator('#lang-en-btn').click();
+    expect(await page.evaluate(() => localStorage.getItem('antfarm.daily.lang'))).toBe('en-US');
+
+    await page.reload();
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('en-US');
+    await expect(page.locator('#priorities-heading')).toHaveText('Priorities');
+
+    const storageState = await context.storageState();
+    const freshContext = await browser.newContext({ storageState });
+    const freshPage = await freshContext.newPage();
+    await freshPage.goto('/');
+    expect(await freshPage.evaluate(() => document.documentElement.lang)).toBe('en-US');
+    await expect(freshPage.locator('#priorities-heading')).toHaveText('Priorities');
+    await freshContext.close();
+
+    await page.locator('#lang-pt-btn').click();
+    await page.reload();
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('pt-BR');
+    await expect(page.locator('#priorities-heading')).toHaveText('Prioridades');
+
+    await page.evaluate(() => localStorage.setItem('antfarm.daily.lang', 'xx-YY'));
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e));
+    await page.reload();
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('pt-BR');
+    expect(errors).toHaveLength(0);
+  });
+
+  test('switching language leaves the planning payload byte-identical', async ({ page }) => {
+    await addItem(page, 'priority', 'Ship the switcher');
+    await addCommitment(page, 'Standup', '09:00');
+    const before = await page.evaluate(() => localStorage.getItem('antfarm.daily.v1'));
+
+    await page.locator('#lang-en-btn').click();
+    await page.locator('#lang-pt-btn').click();
+
+    const after = await page.evaluate(() => localStorage.getItem('antfarm.daily.v1'));
+    expect(after).toBe(before);
+    await expect(page.locator('#priorities-list .item-text')).toHaveText('Ship the switcher');
+  });
+
+  test('the language switcher is keyboard-operable, exposes its state via ARIA rather than a class, and names both options in either language', async ({
+    page,
+  }) => {
+    await expect(page.locator('#lang-pt-btn')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#lang-en-btn')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#lang-pt-btn')).toHaveAccessibleName(/.+/);
+    await expect(page.locator('#lang-en-btn')).toHaveAccessibleName(/.+/);
+
+    await page.locator('#lang-en-btn').focus();
+    const outline = await page.locator('#lang-en-btn').evaluate((el) => getComputedStyle(el).outlineStyle);
+    expect(outline).not.toBe('none');
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('#lang-en-btn')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#lang-pt-btn')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#lang-pt-btn')).toHaveAccessibleName(/.+/);
+    await expect(page.locator('#lang-en-btn')).toHaveAccessibleName(/.+/);
+  });
+
+  test('no horizontal scroll at 360px with the switcher present, in either language; the header and Unfinished buttons are not clipped by the longer English text', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 700 });
+
+    await page.locator('#prev-day').click();
+    await addItem(page, 'task', 'Left unfinished from yesterday');
+    await page.locator('#today-btn').click();
+    await addItem(page, 'priority', 'A reasonably long priority to check wrapping behaves');
+    await addItem(page, 'task', 'Another moderately long task description to check wrapping');
+
+    let fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+    expect(fits).toBe(true);
+
+    await page.locator('#lang-en-btn').click();
+
+    fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+    expect(fits).toBe(true);
+
+    const header = page.locator('.day-header');
+    const headerOverflows = await header.evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect(headerOverflows).toBe(false);
+
+    const completeBtn = page.locator('#unfinished-list .unfinished-complete').first();
+    const moveBtn = page.locator('#unfinished-list .unfinished-move').first();
+    const completeClipped = await completeBtn.evaluate(
+      (el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight
+    );
+    const moveClipped = await moveBtn.evaluate(
+      (el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight
+    );
+    expect(completeClipped).toBe(false);
+    expect(moveClipped).toBe(false);
+  });
+
+  test('captures screenshots of a fully populated day in English at mobile and desktop widths, and of the switcher showing its active state', async ({
+    page,
+  }) => {
+    await page.locator('#prev-day').click();
+    await addItem(page, 'task', 'Carried over from yesterday');
+    await page.locator('#today-btn').click();
+
+    await addItem(page, 'priority', 'Ship the English catalogue');
+    await addItem(page, 'priority', 'Review the deadlines');
+    await addItem(page, 'task', 'Reply to emails');
+    await addCommitment(page, 'Daily standup', '09:00');
+    await addGoal(page, 'Close out slice 4');
+    await addDeadline(page, 'Renew certificate', '2026-09-01');
+    await addDeadline(page, 'Conference talk', '2026-10-15');
+
+    await page.locator('#lang-en-btn').click();
+
+    await page.setViewportSize({ width: 360, height: 1600 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/en-us-mobile-360.png' });
+
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/en-us-desktop-1280.png' });
+
+    await page.locator('.lang-switch').screenshot({ path: 'screenshots/lang-switch-active-en.png' });
   });
 });
 
