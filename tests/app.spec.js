@@ -2307,3 +2307,297 @@ test.describe('week paging and jump-to-date (Issue #42)', () => {
     await page.screenshot({ path: 'screenshots/week-nav-past-week-1280.png' });
   });
 });
+
+// A day with 40 tasks, 3 priorities, 8 commitments and 12 deadlines, seeded
+// straight into localStorage (typing that many items through the form would
+// spend the run's turn budget without testing anything the ordering tests
+// above don't already cover). Wednesday, matching the fixed "today" used
+// elsewhere in this file, so the weekday-name assertions below are exact.
+const LARGE_DAY_KEY = '2026-09-16';
+
+function addDaysISO(key, delta) {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(y, m - 1, d + delta);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function largeDaySeed() {
+  const priorities = Array.from({ length: 3 }, (_, i) => ({
+    id: `p${i}`,
+    text: `Priority ${i + 1}`,
+    completed: i === 0,
+  }));
+  const tasks = Array.from({ length: 40 }, (_, i) => ({
+    id: `t${i}`,
+    text: `Task number ${i + 1}`,
+    completed: i % 3 === 0,
+  }));
+  const commitments = Array.from({ length: 8 }, (_, i) => ({
+    id: `c${i}`,
+    text: `Commitment ${i + 1}`,
+    time: `${String(7 + i).padStart(2, '0')}:00`,
+    completed: i % 2 === 0,
+  }));
+  const deadlines = Array.from({ length: 12 }, (_, i) => ({
+    id: `d${i}`,
+    text: `Deadline ${i + 1}`,
+    due: addDaysISO(LARGE_DAY_KEY, i - 3),
+    completed: i % 4 === 0,
+  }));
+  return {
+    version: 1,
+    days: { [LARGE_DAY_KEY]: { priorities, tasks, commitments, notes: '' } },
+    weeks: {},
+    deadlines,
+  };
+}
+
+test.describe('completed priorities and tasks sink to the bottom (Issue #44)', () => {
+  test('completed tasks sink below incomplete ones; within each group, insertion order is preserved', async ({
+    page,
+  }) => {
+    await addItem(page, 'task', 'A');
+    await addItem(page, 'task', 'B');
+    await addItem(page, 'task', 'C');
+    await addItem(page, 'task', 'D');
+    const list = page.locator('#tasks-list');
+    const texts = () => list.locator('.item-text');
+
+    await list.getByText('B', { exact: true }).click();
+    await expect(texts()).toHaveText(['A', 'C', 'D', 'B']);
+
+    await list.getByText('A', { exact: true }).click();
+    await expect(texts()).toHaveText(['C', 'D', 'B', 'A']);
+
+    await list.getByText('B', { exact: true }).click();
+    await expect(texts()).toHaveText(['B', 'C', 'D', 'A']);
+  });
+
+  test('completed priorities sink too, and the badges renumber 1..n in the new rendered order', async ({ page }) => {
+    await addItem(page, 'priority', 'One');
+    await addItem(page, 'priority', 'Two');
+    await addItem(page, 'priority', 'Three');
+    const list = page.locator('#priorities-list');
+
+    await list.getByText('One', { exact: true }).click();
+
+    await expect(list.locator('.item-text')).toHaveText(['Two', 'Three', 'One']);
+    await expect(list.locator('.item-badge')).toHaveText(['1', '2', '3']);
+  });
+
+  test('sinking is a read-time view: stored priorities and tasks keep insertion order and the same ids across a reload', async ({
+    page,
+  }) => {
+    await addItem(page, 'task', 'A');
+    await addItem(page, 'task', 'B');
+    await addItem(page, 'task', 'C');
+    await page.locator('#tasks-list').getByText('A', { exact: true }).click();
+
+    const readStoredTasks = () =>
+      page.evaluate(() => {
+        const state = JSON.parse(localStorage.getItem('antfarm.daily.v1'));
+        const key = Object.keys(state.days)[0];
+        return state.days[key].tasks.map((item) => ({ text: item.text, id: item.id }));
+      });
+
+    const before = await readStoredTasks();
+    expect(before.map((item) => item.text)).toEqual(['A', 'B', 'C']);
+
+    await page.reload();
+
+    const after = await readStoredTasks();
+    expect(after).toEqual(before);
+    await expect(page.locator('#tasks-list .item-text')).toHaveText(['B', 'C', 'A']);
+  });
+
+  test('a completed commitment keeps its time position, a completed deadline keeps its due-date position, a completed week goal keeps its insertion position', async ({
+    page,
+  }) => {
+    await addCommitment(page, 'Early', '08:00');
+    await addCommitment(page, 'Mid', '12:00');
+    await addCommitment(page, 'Late', '18:00');
+    await page.locator('#commitments-list').getByText('Mid', { exact: true }).click();
+    await expect(page.locator('#commitments-list .item-text')).toHaveText(['Early', 'Mid', 'Late']);
+
+    await addDeadline(page, 'Soonest', '2026-10-01');
+    await addDeadline(page, 'Middle', '2026-10-15');
+    await addDeadline(page, 'Latest', '2026-11-01');
+    await page.locator('#deadlines-list').getByText('Middle', { exact: true }).click();
+    await expect(page.locator('#deadlines-list .item-text')).toHaveText(['Soonest', 'Middle', 'Latest']);
+
+    await addGoal(page, 'One');
+    await addGoal(page, 'Two');
+    await addGoal(page, 'Three');
+    await page.locator('#week-goals-list').getByText('One', { exact: true }).click();
+    await expect(page.locator('#week-goals-list .item-text')).toHaveText(['One', 'Two', 'Three']);
+  });
+
+  test('sinking does not change week progress, the Unfinished count, or the week-strip has-work marker', async ({
+    page,
+  }) => {
+    await addItem(page, 'task', 'A');
+    await addItem(page, 'task', 'B');
+    await addItem(page, 'task', 'C');
+    await addItem(page, 'priority', 'P1');
+
+    await page.locator('#tasks-list').getByText('A', { exact: true }).click();
+    await page.locator('#tasks-list').getByText('C', { exact: true }).click();
+
+    await expect(page.locator('#week-progress-text')).toHaveText('2 de 4 concluídos esta semana');
+    await expect(page.locator('.week-day.is-selected')).toHaveClass(/has-work/);
+
+    await page.locator('#prev-day').click();
+    await addItem(page, 'task', 'Older unfinished');
+    await page.locator('#today-btn').click();
+    await expect(page.locator('#unfinished-summary')).toHaveText('1 item pendente de dias anteriores.');
+  });
+
+  test.describe('a large day (40 tasks, 3 priorities, 8 commitments, 12 deadlines)', () => {
+    test.beforeEach(async ({ page }) => {
+      await page.clock.install({ time: new Date(`${LARGE_DAY_KEY}T09:00:00`) });
+      await page.goto('/');
+      await page.evaluate((seed) => localStorage.setItem('antfarm.daily.v1', JSON.stringify(seed)), largeDaySeed());
+      await page.reload();
+    });
+
+    test('remains usable at 360, 768, 1024 and 1280px: no horizontal scroll, every panel heading/add-form input/submit button present and unclipped, and the #38 panel order holds; a new task can still be added', async ({
+      page,
+    }) => {
+      const headings = [
+        '#priorities-heading',
+        '#tasks-heading',
+        '#commitments-heading',
+        '#notes-heading',
+        '#unfinished-heading',
+        '#week-heading',
+        '#upcoming-heading',
+      ];
+      const inputs = [
+        '#priority-input',
+        '#task-input',
+        '#commitment-time-input',
+        '#commitment-input',
+        '#goal-input',
+        '#deadline-input',
+        '#deadline-due-input',
+      ];
+      const submitButtons = [
+        '#priority-form button[type=submit]',
+        '#task-form button[type=submit]',
+        '#commitment-form button[type=submit]',
+        '#goal-form button[type=submit]',
+        '#deadline-form button[type=submit]',
+      ];
+
+      for (const width of [360, 768, 1024, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+
+        const fits = await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        );
+        expect(fits, `width ${width}`).toBe(true);
+
+        for (const selector of [...headings, ...inputs, ...submitButtons]) {
+          const el = page.locator(selector);
+          await expect(el, `${selector} at ${width}px`).toBeVisible();
+          const clipped = await el.evaluate(
+            (node) => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1
+          );
+          expect(clipped, `${selector} clipped at ${width}px`).toBe(false);
+        }
+
+        const panelOrder = await page.evaluate(() =>
+          Array.from(document.querySelectorAll('main .panel')).map((el) => el.className)
+        );
+        expect(panelOrder[0], `${width}px`).toContain('priorities-panel');
+        expect(panelOrder[1], `${width}px`).toContain('tasks-panel');
+        expect(panelOrder[2], `${width}px`).toContain('commitments-panel');
+        expect(panelOrder[3], `${width}px`).toContain('unfinished-panel');
+        expect(panelOrder[4], `${width}px`).toContain('week-panel');
+        expect(panelOrder[5], `${width}px`).toContain('upcoming-panel');
+
+        const topOrder = await page.evaluate(() =>
+          Array.from(document.querySelectorAll('main > *')).map((el) => el.className)
+        );
+        expect(topOrder[1], `${width}px`).toContain('notes-panel');
+      }
+
+      await addItem(page, 'task', 'Added to a large day');
+      await expect(page.locator('#tasks-list')).toContainText('Added to a large day');
+    });
+
+    test('completing an item in a large list re-renders within the default timeout, with no console error', async ({
+      page,
+    }) => {
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(String(e)));
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') errors.push(msg.text());
+      });
+
+      const target = page.locator('#tasks-list .item').nth(1); // not yet completed
+      const id = await target.getAttribute('data-id');
+      const yBefore = (await target.boundingBox()).y;
+
+      await target.locator('.item-toggle').click();
+
+      const movedItem = page.locator(`#tasks-list .item[data-id="${id}"]`);
+      await expect(movedItem).toHaveClass(/is-complete/);
+      const yAfter = (await movedItem.boundingBox()).y;
+      expect(yAfter).toBeGreaterThan(yBefore);
+
+      expect(errors).toHaveLength(0);
+    });
+
+    test('the large day shows no leftover word from the other language, in pt-BR and after switching to English', async ({
+      page,
+    }) => {
+      expect(await page.evaluate(() => document.documentElement.lang)).toBe('pt-BR');
+      await assertNoLeftoverWords(page, [
+        'Today',
+        'Tasks',
+        'Priorities',
+        'Commitments',
+        'Unfinished',
+        'Add',
+        'Delete',
+        'Week',
+        'Overdue',
+        'Yesterday',
+        'September',
+        'Wednesday',
+      ]);
+
+      await page.locator('#lang-en-btn').click();
+      expect(await page.evaluate(() => document.documentElement.lang)).toBe('en-US');
+      await assertNoLeftoverWords(page, [
+        'Hoje',
+        'Tarefas',
+        'Prioridades',
+        'Compromissos',
+        'Pendências',
+        'Adicionar',
+        'Excluir',
+        'Semana',
+        'Atrasado',
+        'Ontem',
+        'setembro',
+        'quarta-feira',
+      ]);
+    });
+
+    test('captures evidence screenshots of the large day at 360px and 1280px in pt-BR, and of completed tasks sunk to the bottom', async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 360, height: 1600 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: 'screenshots/large-day-pt-br-mobile-360.png' });
+
+      await page.setViewportSize({ width: 1280, height: 1400 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: 'screenshots/large-day-pt-br-desktop-1280.png' });
+
+      await page.locator('.tasks-panel').screenshot({ path: 'screenshots/large-day-tasks-sunk.png' });
+    });
+  });
+});
