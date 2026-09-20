@@ -63,16 +63,44 @@ function sortByTime(commitments) {
   return [...commitments].sort((a, b) => a.time.localeCompare(b.time));
 }
 
+// Completed items sink below incomplete ones. Incomplete items keep
+// insertion order (oldest still-open item first); completed items are
+// *reversed*, so the one added most recently among the completed items sits
+// highest in that group, and the one that has been sitting in the list the
+// longest keeps sinking further as more get finished around it. See
+// DECISIONS.md for the worked example this pins.
+function sinkCompleted(items) {
+  const incomplete = items.filter((item) => !item.completed);
+  const completed = items.filter((item) => item.completed).reverse();
+  return [...incomplete, ...completed];
+}
+
 // Normalises a stored day to always carry every list, so older records
-// written before `commitments` existed don't hand callers `undefined`.
-export function getDay(state, key) {
+// written before `commitments` existed don't hand callers `undefined` — with
+// no reordering, so every writer below builds on the array actually stored
+// rather than baking a read-time view (sunk or time-sorted) back into
+// `state.days`. See DECISIONS.md.
+function rawDay(state, key) {
   const day = state.days[key];
   if (!day) return emptyDay();
   return {
     priorities: day.priorities ?? [],
     tasks: day.tasks ?? [],
-    commitments: sortByTime(day.commitments ?? []),
+    commitments: day.commitments ?? [],
     notes: day.notes ?? '',
+  };
+}
+
+// The read-time view every renderer and counter uses: completed priorities
+// and tasks sunk, commitments in time order, everything else exactly as
+// stored.
+export function getDay(state, key) {
+  const day = rawDay(state, key);
+  return {
+    priorities: sinkCompleted(day.priorities),
+    tasks: sinkCompleted(day.tasks),
+    commitments: sortByTime(day.commitments),
+    notes: day.notes,
   };
 }
 
@@ -128,7 +156,7 @@ export function addItem(state, key, list, text, time) {
   const trimmed = text.trim();
   if (!trimmed) return { state, error: 'empty' };
   if (list === 'commitments' && !time) return { state, error: 'empty' };
-  const day = getDay(state, key);
+  const day = rawDay(state, key);
   if (list === 'priorities' && day.priorities.length >= MAX_PRIORITIES) {
     return { state, error: 'limit' };
   }
@@ -143,13 +171,13 @@ export function addItem(state, key, list, text, time) {
 // Not trimmed: mid-typing whitespace (a trailing space, a blank line) is the
 // author's, not a stray to clean up the way a submitted list item's is.
 export function setNote(state, key, text) {
-  const day = getDay(state, key);
+  const day = rawDay(state, key);
   const nextDay = { ...day, notes: text.slice(0, MAX_NOTE_LENGTH) };
   return withDay(state, key, nextDay);
 }
 
 export function toggleItem(state, key, list, id) {
-  const day = getDay(state, key);
+  const day = rawDay(state, key);
   const nextDay = {
     ...day,
     [list]: day[list].map((item) => (item.id === id ? { ...item, completed: !item.completed } : item)),
@@ -158,7 +186,7 @@ export function toggleItem(state, key, list, id) {
 }
 
 export function removeItem(state, key, list, id) {
-  const day = getDay(state, key);
+  const day = rawDay(state, key);
   const nextDay = { ...day, [list]: day[list].filter((item) => item.id !== id) };
   return withDay(state, key, nextDay);
 }
@@ -196,16 +224,16 @@ export function unfinishedBefore(state, dayKey) {
 // silently break the 3-priority rule, so it's refused instead, the same
 // visible-message shape `addItem`'s limit error already uses.
 export function moveItem(state, fromKey, list, id, toKey) {
-  const fromDay = getDay(state, fromKey);
+  const fromDay = rawDay(state, fromKey);
   const item = fromDay[list].find((entry) => entry.id === id);
   if (!item) return { state, error: null };
   if (list === 'priorities') {
-    const toDay = getDay(state, toKey);
+    const toDay = rawDay(state, toKey);
     if (toDay.priorities.length >= MAX_PRIORITIES) return { state, error: 'limit' };
   }
   const nextFromDay = { ...fromDay, [list]: fromDay[list].filter((entry) => entry.id !== id) };
   const afterRemove = withDay(state, fromKey, nextFromDay);
-  const toDay = getDay(afterRemove, toKey);
+  const toDay = rawDay(afterRemove, toKey);
   const nextToDay = { ...toDay, [list]: [...toDay[list], item] };
   return { state: withDay(afterRemove, toKey, nextToDay), error: null };
 }

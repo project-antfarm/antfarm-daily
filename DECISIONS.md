@@ -875,3 +875,74 @@ week-nav-desktop-1280.png` and `screenshots/week-nav-past-week-1280.png`
 (header with both new controls at 360px and 1280px, and 1280px after paging
 one week back) are captured by the new tests and published by the existing
 `browser-evidence-*` CI artifact.
+
+## 2026-09-20 — Completed priorities/tasks sink to the bottom; large-day check (Issue #44)
+
+**Completed-sinks-to-bottom is a read-time derived ordering in `getDay`,
+exactly like `sortByTime` — nothing in `state.days` is rewritten or
+migrated by it.** `getDay` now normalises a stored day twice: an internal
+`rawDay` helper returns every list exactly as stored (the old `getDay`
+body, minus sorting), and the exported `getDay` calls `rawDay` and then
+applies `sinkCompleted` to `priorities`/`tasks` (and the existing
+`sortByTime` to `commitments`) before handing the result to a caller. Only
+`getDay`'s *return value* is reordered; the object read from `state.days`
+is untouched.
+
+**Every writer (`addItem`, `setNote`, `toggleItem`, `removeItem`,
+`moveItem`) now reads `rawDay`, not `getDay`.** This is the actual bug the
+Issue's large-list check surfaced, and it's a correctness fix, not a
+style one: before this change, every one of those functions built its next
+state by spreading/mapping/filtering over `getDay(state, key)` — the
+*sunk* view — and stored the result via `withDay`. That silently baked
+whatever order `render()` was currently showing back into `state.days` on
+every single toggle, so after two completions the "insertion order" the
+acceptance criteria pin was already gone, and a later `sinkCompleted` pass
+was sorting an array that no longer reflected when anything was actually
+added. `rawDay` gives every writer the untouched stored array to extend,
+map or filter, so `state.days` only ever grows/shrinks by the items a
+person actually added or removed — never reordered by a read.
+
+**Within the completed group, order is by *add* time, reversed — not by
+*completion* time, and not by insertion order forward.** Concretely,
+`sinkCompleted` is `[...incomplete-in-stored-order, ...completed-in-stored-order.reverse()]`,
+not a single stable `Array.prototype.sort` on the `completed` flag: a plain
+stable sort keeps *both* groups in forward stored order, which cannot
+reproduce the Issue's own worked example. With tasks `A, B, C, D` added in
+that order, completing `B` then `A` must render `C, D, B, A` — `B` ahead of
+`A` in the completed group, even though `A` was *added* first. Forward
+insertion order for the completed group would give `C, D, A, B` instead,
+which fails that criterion. Reversing only the completed slice makes the
+item added *last* among the completed ones surface highest in that group,
+so the ones that have been sitting in the list the longest keep sinking
+further as more finish around them — and it still needs nothing beyond the
+stored array itself (no completion timestamp, no extra field). The
+incomplete group stays plain forward stored order, matching a checklist's
+normal reading order and the Issue's "un-completing an item returns it to
+its original position among the incomplete items" requirement.
+
+**Priorities and tasks sink; commitments, deadlines and week goals do
+not.** A schedule read out of time order stops being a schedule
+(commitments keep `sortByTime`, unchanged by this Issue), a deadline out of
+due-date order stops answering "what's most urgent" (`getDeadlines`'s sort
+from #20, unchanged), and week goals are a short, week-scoped list without
+the "which of thirty is still open" problem priorities/tasks have at
+day-scale (unchanged, plain stored order). Sinking only the two lists that
+can actually grow long and that the Issue's own "what else do I need to
+do?" question is about keeps the change to exactly the two call sites named
+in the Issue, with every other list's existing test suite passing
+unmodified.
+
+**The large-list check found no CSS defect.** Seeding 40 tasks, 3
+priorities, 8 commitments and 12 deadlines and checking 360/768/1024/1280px
+found every panel heading, add-form input and submit button still visible
+and unclipped, no horizontal scroll, and the #38 panel order intact — the
+existing flex/grid layout from #38 already scales with list length since
+nothing in it assumes a fixed item count. No CSS changed for this Issue;
+only `state.js`'s ordering logic did.
+
+**Evidence.** `screenshots/large-day-pt-br-mobile-360.png`,
+`screenshots/large-day-pt-br-desktop-1280.png` (the seeded large day at
+360px and 1280px in pt-BR) and `screenshots/large-day-tasks-sunk.png` (the
+Tasks panel with completed items sunk below the open ones) are captured by
+the new tests and published by the existing `browser-evidence-*` CI
+artifact.
