@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/source-sans-3-latin-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/source-sans-3-latin-700.woff2") format("woff2");
+}
+
 :root {
   --bg: #f6f4ef;
   --surface: #ffffff;
@@ -8,6 +24,15 @@
   --accent-text: #8a3608;
   --focus: #1d4ed8;
   --radius: 10px;
+
+  --font-sans: "Source Sans 3", -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  --weight-regular: 400;
+  --weight-bold: 700;
+  --line-normal: 1.45;
+  --text-h1: clamp(1.5rem, 5vw, 2.1rem);
+  --text-h2: 1.05rem;
+  --text-body: 1rem;
+  --text-meta: 0.8rem;
 }
 
 * {
@@ -23,8 +48,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
-  line-height: 1.45;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: var(--weight-regular);
+  line-height: var(--line-normal);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -98,8 +125,8 @@ body {
 
 .day-header h1 {
   margin: 0 0 16px;
-  font-size: clamp(1.5rem, 5vw, 2rem);
-  font-weight: 700;
+  font-size: var(--text-h1);
+  font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
 }
 
@@ -198,7 +225,6 @@ body {
 }
 
 .week-day.is-today {
-  border-style: dashed;
   border-color: var(--accent-text);
 }
 
@@ -230,7 +256,6 @@ body {
 
 .notes-panel {
   margin-top: 20px;
-  border-top: 4px solid var(--muted);
 }
 
 .notes-textarea {
@@ -252,10 +277,6 @@ body {
   border-top: 4px solid var(--accent);
 }
 
-.commitments-panel {
-  border-top: 4px dashed var(--accent);
-}
-
 .panel-head {
   display: flex;
   align-items: baseline;
@@ -266,12 +287,12 @@ body {
 
 .panel-head h2 {
   margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: var(--text-h2);
+  font-weight: var(--weight-bold);
 }
 
 .panel-hint {
-  font-size: 0.8rem;
+  font-size: var(--text-meta);
   color: var(--muted);
 }
 
@@ -301,10 +322,6 @@ body {
 
 .priorities-list .item {
   border-left: 4px solid var(--accent);
-}
-
-.commitments-list .item {
-  border-left: 4px dashed var(--accent);
 }
 
 .item-toggle {
@@ -470,7 +487,6 @@ body {
 
 .unfinished-panel {
   margin-top: 20px;
-  border-top: 4px solid var(--accent-text);
 }
 
 .unfinished-summary {
@@ -529,7 +545,6 @@ body {
 
 .week-panel {
   margin-top: 20px;
-  border-top: 4px double var(--accent-text);
 }
 
 .week-progress {
@@ -567,7 +582,6 @@ body {
 
 .upcoming-panel {
   margin-top: 20px;
-  border-top: 4px dotted var(--accent-text);
 }
 
 .deadlines-summary {

@@ -1,4 +1,31 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+
+// WCAG 2.x relative luminance / contrast ratio, used only by the #46 contrast
+// assertions below — kept local so no dependency is added for it.
+function relativeLuminance([r, g, b]) {
+  const channel = (c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const [rl, gl, bl] = [channel(r), channel(g), channel(b)];
+  return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+}
+
+function contrastRatio(rgbA, rgbB) {
+  const lA = relativeLuminance(rgbA);
+  const lB = relativeLuminance(rgbB);
+  const [lighter, darker] = lA >= lB ? [lA, lB] : [lB, lA];
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function parseRgb(str) {
+  const nums = str.match(/[\d.]+/g).map(Number);
+  return [nums[0], nums[1], nums[2]];
+}
 
 async function addItem(page, list, text) {
   const input = page.locator(list === 'priority' ? '#priority-input' : '#task-input');
@@ -2599,5 +2626,165 @@ test.describe('completed priorities and tasks sink to the bottom (Issue #44)', (
 
       await page.locator('.tasks-panel').screenshot({ path: 'screenshots/large-day-tasks-sunk.png' });
     });
+  });
+});
+
+test.describe('visual identity: one accent, a self-hosted typeface, a real type scale (#46)', () => {
+  const PANEL_SELECTOR = '.panel, .notes-panel';
+
+  test('every panel and the notes panel use only solid or absent border styles', async ({ page }) => {
+    await page.goto('/');
+    const sides = await page.$$eval(PANEL_SELECTOR, (els) =>
+      els.map((el) => {
+        const cs = getComputedStyle(el);
+        return [cs.borderTopStyle, cs.borderRightStyle, cs.borderBottomStyle, cs.borderLeftStyle];
+      })
+    );
+    for (const [top, right, bottom, left] of sides) {
+      for (const style of [top, right, bottom, left]) {
+        expect(['solid', 'none']).toContain(style);
+      }
+    }
+  });
+
+  test('styles.css contains no dashed, dotted or double border anywhere', () => {
+    const css = fs.readFileSync(repoRoot + 'styles.css', 'utf8');
+    expect(css).not.toMatch(/\b(dashed|dotted|double)\b/);
+  });
+
+  test('at most one panel carries a distinguishing top-edge accent, and it is Priorities', async ({ page }) => {
+    await page.goto('/');
+    const edges = await page.$$eval(PANEL_SELECTOR, (els) =>
+      els.map((el) => ({
+        isPriorities: el.classList.contains('priorities-panel'),
+        key: `${getComputedStyle(el).borderTopWidth} ${getComputedStyle(el).borderTopColor}`,
+      }))
+    );
+    const distinct = new Set(edges.map((e) => e.key));
+    expect(distinct.size).toBeLessThanOrEqual(2);
+
+    const others = edges.filter((e) => !e.isPriorities);
+    expect(new Set(others.map((e) => e.key)).size).toBe(1);
+
+    if (distinct.size === 2) {
+      const priorities = edges.find((e) => e.isPriorities);
+      expect(priorities.key).not.toBe(others[0].key);
+    }
+  });
+
+  test('the typeface is self-hosted with a relative @font-face src and no third-party font host', async ({ page }) => {
+    const css = fs.readFileSync(repoRoot + 'styles.css', 'utf8');
+    const html = fs.readFileSync(repoRoot + 'index.html', 'utf8');
+
+    expect(css).toMatch(/@font-face[\s\S]*?src:\s*url\(["']?\.\//);
+
+    for (const needle of ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn', 'http://', 'https://']) {
+      expect(css.toLowerCase()).not.toContain(needle);
+      expect(html.toLowerCase()).not.toContain(needle);
+    }
+
+    await page.goto('/');
+    const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+    const firstFamily = fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
+    expect(firstFamily).toBe('Source Sans 3');
+    expect(/,\s*(sans-serif|serif|monospace|system-ui)\s*$/i.test(fontFamily)).toBe(true);
+  });
+
+  test('the app survives the font not loading, at 360px', async ({ page }) => {
+    // The aborted woff2 request itself makes Chromium log a browser-level
+    // "Failed to load resource" line; that's expected noise from the abort,
+    // not an application error, so only page script errors count here.
+    const pageErrors = [];
+    page.on('pageerror', (err) => pageErrors.push(String(err)));
+    const consoleErrors = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && !/Failed to load resource/.test(msg.text())) consoleErrors.push(msg.text());
+    });
+    await page.route('**/*.woff2', (route) => route.abort());
+    await page.setViewportSize({ width: 360, height: 700 });
+    await page.goto('/');
+
+    await expect(page.locator('#today-date')).toBeVisible();
+
+    const headings = page.locator('.panel-head h2');
+    expect(await headings.count()).toBeGreaterThan(0);
+    for (const heading of await headings.all()) {
+      await expect(heading).toBeVisible();
+    }
+
+    const forms = page.locator('.add-form');
+    expect(await forms.count()).toBeGreaterThan(0);
+    for (const form of await forms.all()) {
+      await expect(form).toBeVisible();
+    }
+
+    const fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+    expect(fits).toBe(true);
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('the type scale is real: date heading > panel heading > meta text, driven by non-empty :root tokens', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    const tokens = await page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      return [
+        '--font-sans',
+        '--weight-regular',
+        '--weight-bold',
+        '--line-normal',
+        '--text-h1',
+        '--text-h2',
+        '--text-body',
+        '--text-meta',
+      ].map((name) => cs.getPropertyValue(name).trim());
+    });
+    for (const value of tokens) {
+      expect(value).not.toBe('');
+    }
+
+    const sizes = await page.evaluate(() => ({
+      h1: parseFloat(getComputedStyle(document.querySelector('#today-date')).fontSize),
+      h2: parseFloat(getComputedStyle(document.querySelector('.panel-head h2')).fontSize),
+      meta: parseFloat(getComputedStyle(document.querySelector('.panel-hint')).fontSize),
+    }));
+    expect(sizes.h1).toBeGreaterThan(sizes.h2);
+    expect(sizes.h2).toBeGreaterThan(sizes.meta);
+  });
+
+  test('contrast: body text, meta text, accent text and the focus ring all clear WCAG minimums', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#prev-day').focus();
+
+    const raw = await page.evaluate(() => {
+      const cs = (el) => getComputedStyle(el);
+      return {
+        pageBg: cs(document.body).backgroundColor,
+        panelBg: cs(document.querySelector('.priorities-panel')).backgroundColor,
+        bodyText: cs(document.body).color,
+        metaText: cs(document.querySelector('.panel-hint')).color,
+        accentText: cs(document.querySelector('.eyebrow')).color,
+        focusOutline: cs(document.querySelector('#prev-day')).outlineColor,
+      };
+    });
+
+    expect(contrastRatio(parseRgb(raw.bodyText), parseRgb(raw.panelBg))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(parseRgb(raw.metaText), parseRgb(raw.panelBg))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(parseRgb(raw.accentText), parseRgb(raw.pageBg))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(parseRgb(raw.focusOutline), parseRgb(raw.panelBg))).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(parseRgb(raw.focusOutline), parseRgb(raw.pageBg))).toBeGreaterThanOrEqual(3);
+  });
+
+  test('committed font files stay within the weight budget', () => {
+    const dir = `${repoRoot}fonts`;
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.woff2'));
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.length).toBeLessThanOrEqual(2);
+
+    const totalBytes = files.reduce((sum, f) => sum + fs.statSync(`${dir}/${f}`).size, 0);
+    expect(totalBytes).toBeLessThanOrEqual(200 * 1024);
   });
 });
