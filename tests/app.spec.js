@@ -2788,3 +2788,183 @@ test.describe('visual identity: one accent, a self-hosted typeface, a real type 
     expect(totalBytes).toBeLessThanOrEqual(200 * 1024);
   });
 });
+
+test.describe('a non-colour cue for today, and native inputs that match the product (Issue #48)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-09-16T09:00:00') }); // Wednesday
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+  });
+
+  test('today is not colour-only: it differs from a plain sibling day by a non-colour property', async ({ page }) => {
+    await page.locator('#prev-day').click(); // selects Tuesday; today (Wed) stays visible, unselected
+    await expect(page.locator('.week-day.is-today')).not.toHaveClass(/is-selected/);
+
+    const [todayWidth, plainWidth] = await page.evaluate(() => {
+      const today = document.querySelector('.week-day.is-today');
+      const plain = Array.from(document.querySelectorAll('.week-day')).find(
+        (d) => !d.classList.contains('is-today') && !d.classList.contains('is-selected')
+      );
+      return [getComputedStyle(today).borderTopWidth, getComputedStyle(plain).borderTopWidth];
+    });
+    expect(todayWidth).not.toBe(plainWidth);
+  });
+
+  test('today+selected, today-only, selected-only and neither all produce distinct border-width/colour/font-weight combinations', async ({
+    page,
+  }) => {
+    await page.locator('#prev-day').click(); // Tue selected, Wed (today) unselected: covers today-only, selected-only, neither
+
+    const combos = await page.evaluate(() => {
+      const days = Array.from(document.querySelectorAll('.week-day'));
+      return days.map((d) => {
+        const cs = getComputedStyle(d);
+        const num = d.querySelector('.week-day-num');
+        return {
+          isToday: d.classList.contains('is-today'),
+          isSelected: d.classList.contains('is-selected'),
+          key: `${cs.borderTopWidth}|${cs.borderTopColor}|${getComputedStyle(num).fontWeight}`,
+        };
+      });
+    });
+
+    const neither = combos.find((c) => !c.isToday && !c.isSelected);
+    const todayOnly = combos.find((c) => c.isToday && !c.isSelected);
+    const selectedOnly = combos.find((c) => !c.isToday && c.isSelected);
+    expect(neither).toBeTruthy();
+    expect(todayOnly).toBeTruthy();
+    expect(selectedOnly).toBeTruthy();
+
+    await page.locator('#today-btn').click(); // today+selected
+    const todaySelectedKey = await page.locator('.week-day.is-today.is-selected').evaluate((d) => {
+      const cs = getComputedStyle(d);
+      const num = d.querySelector('.week-day-num');
+      return `${cs.borderTopWidth}|${cs.borderTopColor}|${getComputedStyle(num).fontWeight}`;
+    });
+
+    const keys = [neither.key, todayOnly.key, selectedOnly.key, todaySelectedKey];
+    expect(new Set(keys).size).toBe(4);
+  });
+
+  test("#46's border-style and one-accent rules still hold unmodified", async () => {
+    const css = fs.readFileSync(repoRoot + 'styles.css', 'utf8');
+    expect(css).not.toMatch(/\b(dashed|dotted|double)\b/);
+  });
+
+  test('the three native date/time inputs share height, border, radius and font with the text inputs', async ({ page }) => {
+    const props = await page.evaluate(() => {
+      const pick = (id) => {
+        const cs = getComputedStyle(document.getElementById(id));
+        return {
+          height: cs.height,
+          borderWidth: cs.borderWidth,
+          borderRadius: cs.borderRadius,
+          fontFamily: cs.fontFamily,
+          fontSize: cs.fontSize,
+        };
+      };
+      return {
+        task: pick('task-input'),
+        jump: pick('jump-date-input'),
+        time: pick('commitment-time-input'),
+        due: pick('deadline-due-input'),
+      };
+    });
+    for (const key of ['jump', 'time', 'due']) {
+      expect(props[key], key).toEqual(props.task);
+    }
+  });
+
+  test('the three native inputs get the same focus ring as a focused text input', async ({ page }) => {
+    await page.locator('#task-input').focus();
+    const taskOutlineColor = await page.locator('#task-input').evaluate((el) => getComputedStyle(el).outlineColor);
+
+    for (const id of ['jump-date-input', 'commitment-time-input', 'deadline-due-input']) {
+      const el = page.locator(`#${id}`);
+      await el.focus();
+      const style = await el.evaluate((node) => ({
+        outlineStyle: getComputedStyle(node).outlineStyle,
+        outlineColor: getComputedStyle(node).outlineColor,
+      }));
+      expect(style.outlineStyle, id).not.toBe('none');
+      expect(style.outlineColor, id).toBe(taskOutlineColor);
+    }
+  });
+
+  test('the jump-to-date label is visible, matches the jumpDateLabel catalogue in both languages, and stays wired to the input', async ({
+    page,
+  }) => {
+    const label = page.locator('label[for="jump-date-input"]');
+    await expect(label).toBeVisible();
+    await expect(label).not.toHaveClass(/sr-only/);
+    await expect(label).toHaveText('Ir para uma data');
+    expect(await label.getAttribute('for')).toBe('jump-date-input');
+
+    await page.locator('#lang-en-btn').click();
+    await expect(label).toBeVisible();
+    await expect(label).toHaveText('Jump to a date');
+    await expect(page.locator('#jump-date-input')).toHaveAccessibleName('Jump to a date');
+
+    await assertNoLeftoverWords(page, ['Ir para uma data']);
+  });
+
+  test('the pt-BR and en-US catalogue key sets stay unchanged and identical (no new key was added)', async ({ page }) => {
+    const keySets = await page.evaluate(async () => {
+      const { catalogues } = await import('/i18n.js');
+      return Object.fromEntries(Object.entries(catalogues).map(([lang, strings]) => [lang, Object.keys(strings).sort()]));
+    });
+    const [first, ...rest] = Object.values(keySets);
+    for (const keys of rest) {
+      expect(keys).toEqual(first);
+    }
+  });
+
+  test('at 360, 768, 1024 and 1280px, the visible jump label does not overflow, overlap the week strip, or break the #38 panel order, in either language', async ({
+    page,
+  }) => {
+    for (const lang of ['pt', 'en']) {
+      if (lang === 'en') await page.locator('#lang-en-btn').click();
+
+      for (const width of [360, 768, 1024, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+
+        const fits = await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        );
+        expect(fits, `${lang} ${width}px`).toBe(true);
+
+        const header = page.locator('.day-header');
+        const headerOverflows = await header.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+        expect(headerOverflows, `${lang} ${width}px`).toBe(false);
+
+        const [weekBox, jumpLabelBox] = await Promise.all([
+          page.locator('.week-strip').boundingBox(),
+          page.locator('label[for="jump-date-input"]').boundingBox(),
+        ]);
+        expect(jumpLabelBox.y, `${lang} ${width}px`).toBeGreaterThanOrEqual(weekBox.y + weekBox.height - 1);
+
+        const panelOrder = await page.evaluate(() =>
+          Array.from(document.querySelectorAll('main .panel')).map((el) => el.className)
+        );
+        expect(panelOrder[0], `${lang} ${width}px`).toContain('priorities-panel');
+        expect(panelOrder[1], `${lang} ${width}px`).toContain('tasks-panel');
+        expect(panelOrder[2], `${lang} ${width}px`).toContain('commitments-panel');
+      }
+    }
+  });
+
+  test('captures evidence of today unselected in the week strip at 1280px, and the header inputs at 360px', async ({
+    page,
+  }) => {
+    await page.locator('#prev-day').click(); // Tue selected; Wed (today) visible but unselected
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/week-strip-today-unselected-1280.png' });
+
+    await page.locator('#today-btn').click();
+    await page.setViewportSize({ width: 360, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: 'screenshots/header-inputs-360.png' });
+  });
+});

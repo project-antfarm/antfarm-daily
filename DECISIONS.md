@@ -1014,3 +1014,71 @@ the diff is `styles.css`, `fonts/`, this file and new tests in
 `tests/app.spec.js`. `index.html` didn't need a change: the `@font-face`
 `src` is a relative path resolved from `styles.css` itself, so nothing in
 the `<head>` had to move.
+
+## 2026-09-20 — A non-colour cue for today, and native inputs that match the product (Issue #48)
+
+**Today's non-colour channel: border width, on `.week-day` itself.**
+`.week-day.is-today` now carries `border-width: 2px` (was: colour only,
+still `1px`), and a compound `.week-day.is-today.is-selected` rule bumps it
+again to `3px` so the combined state doesn't collapse onto plain
+`is-selected`'s `2px`. Border width was picked over a rendered marker
+because `is-selected` already reads via width (`2px`) plus the
+`.week-day-num` `font-weight: 800` bump — reusing the same channel keeps
+the whole strip legible as one system instead of introducing a second kind
+of visual language (an underline or dot) for a second kind of state. The
+`has-work` dot stays exactly what it was: a "this day has content" marker,
+unrelated to "this is today".
+
+**All four combinations differ in the `(borderWidth, borderColor,
+font-weight)` tuple:** neither → `1px` / `var(--border)` / `600`; today-only
+→ `2px` / `var(--accent-text)` / `600`; selected-only → `2px` /
+`var(--accent-text)` / `800`; today+selected → `3px` /
+`var(--accent-text)` / `800`. The `.week-day.is-today.is-selected` selector
+has one more class than plain `.week-day.is-selected`, so its `3px` wins on
+specificity regardless of declaration order — no `!important`, no
+reordering trick.
+
+**One shared rule for every input, native or not.** `.add-form input` and
+`.day-jump-input` are now one selector: `height: 44px`, `padding: 0 12px`,
+the same `border`, `border-radius` and `font: inherit`. The previous
+`.day-jump-input` block (`min-height: 36px`, `padding: 0 10px`, no explicit
+`height`) is gone. `height` (not just `padding`) turned out to matter: a
+native `date`/`time` control's internal field-and-spinner box has its own
+intrinsic minimum that a text input doesn't, so `#commitment-time-input`
+and `#deadline-due-input` measured ~2px taller than `#task-input` under
+identical padding alone (measured before this change: `45.1875px` vs
+`47.1875px`) even though both already shared padding/border/radius/font via
+the pre-existing `.add-form input` descendant selector — an explicit
+`height` pins all four to the same box regardless of each control's
+internal chrome. The existing per-type flex rules
+(`.commitment-form-fields input[type='time']`,
+`.deadline-form-fields input[type='date']`) are untouched; they only ever
+set `flex`/`min-width` and already win on specificity. Left
+`::-webkit-calendar-picker-indicator` alone — at the new height it doesn't
+clash with the border or clip.
+
+**The jump label: `sr-only` → visible meta text, same key.** `#jump-date-input`'s
+`<label>` swapped its `sr-only` class for a new `.day-jump-label` rule
+(`font-size: var(--text-meta)`, `color: var(--muted)`, `font-weight: 600` —
+the same visual register as `.panel-hint`), and `.day-jump` became a
+`flex; align-items: center; flex-wrap: wrap; gap: 8px` row so the label
+sits beside the input instead of stacking awkwardly. Still the existing
+`jumpDateLabel` catalogue string in both languages; no new key, no copy
+change, `for`/`id` untouched.
+
+**Today-unselected test state.** The app preserves the same weekday when
+paging by week (`prevWeekBtn`/`nextWeekBtn` both shift `activeDay()` by
+exactly `±7`), so from today's own week no sequence of week-paging clicks
+alone can land on a different day while keeping real "today" in view —
+paging away always drops today out of the visible range, and paging back
+always re-selects it. The tests reach "today visible, not selected" the
+direct way instead: `#prev-day` once, which moves the selection to the
+adjacent day within the same displayed week.
+
+**Evidence.** `screenshots/week-strip-today-unselected-1280.png` (the week
+strip with today visible but unselected, at 1280px) and
+`screenshots/header-inputs-360.png` (the header with the visible jump label
+and the three matched inputs, at 360px), both published by the existing
+`browser-evidence-*` CI artifact. No change to `app.js`, `state.js` or
+`i18n.js`; the diff is `styles.css`, the `.day-jump` block of `index.html`,
+this file and new tests in `tests/app.spec.js`.
