@@ -1783,7 +1783,124 @@ test('captures screenshots of a fully populated pt-BR interface at mobile and de
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/pt-br-mobile-360.png' });
 
+  await page.setViewportSize({ width: 768, height: 1400 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: 'screenshots/pt-br-tablet-768.png' });
+
   await page.setViewportSize({ width: 1280, height: 1200 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: 'screenshots/pt-br-desktop-1280.png' });
+});
+
+test.describe('a deliberate desktop layout above 1024px (Issue #38)', () => {
+  test("the container widens well past today's 640px cap at 1280px, but 360px and 768px render at the same width as today", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 900 });
+    expect(await page.locator('.page').evaluate((el) => el.getBoundingClientRect().width)).toBe(360);
+
+    await page.setViewportSize({ width: 768, height: 900 });
+    expect(await page.locator('.page').evaluate((el) => el.getBoundingClientRect().width)).toBe(640);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    expect(await page.locator('.page').evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThan(900);
+  });
+
+  test('#today-date renders on a single line at 1280px, in pt-BR and in English', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const heading = page.locator('#today-date');
+
+    const ptBox = await heading.boundingBox();
+    const ptLineHeight = await heading.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+    expect(ptBox.height).toBeLessThan(ptLineHeight * 1.5);
+
+    await page.locator('#lang-en-btn').click();
+    const enBox = await heading.boundingBox();
+    const enLineHeight = await heading.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+    expect(enBox.height).toBeLessThan(enLineHeight * 1.5);
+  });
+
+  test('a three-word priority renders on a single line at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await addItem(page, 'priority', 'Ship the feature');
+
+    const text = page.locator('#priorities-list .item-text').first();
+    const box = await text.boundingBox();
+    const lineHeight = await text.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+    expect(box.height).toBeLessThan(lineHeight * 1.5);
+  });
+
+  test('every add-form keeps its text input and submit button on the same row at 1280px, including Commitments and Deadlines', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const forms = [
+      ['#priority-input', '#priority-form button[type="submit"]'],
+      ['#task-input', '#task-form button[type="submit"]'],
+      ['#commitment-input', '#commitment-form button[type="submit"]'],
+      ['#goal-input', '#goal-form button[type="submit"]'],
+      ['#deadline-input', '#deadline-form button[type="submit"]'],
+    ];
+    for (const [input, button] of forms) {
+      const inputY = await page.locator(input).evaluate((el) => el.getBoundingClientRect().y);
+      const buttonY = await page.locator(button).evaluate((el) => el.getBoundingClientRect().y);
+      expect(Math.abs(inputY - buttonY)).toBeLessThan(3);
+    }
+  });
+
+  test('the language switcher shares a horizontal band with the day-nav controls at 1280px, and its #36 behaviours are unchanged', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+
+    const switchBox = await page.locator('.lang-switch').boundingBox();
+    const navBox = await page.locator('.day-nav').boundingBox();
+    const overlap = Math.min(switchBox.y + switchBox.height, navBox.y + navBox.height) - Math.max(switchBox.y, navBox.y);
+    expect(overlap).toBeGreaterThan(0);
+
+    await expect(page.locator('#lang-pt-btn')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#lang-en-btn')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#lang-pt-btn')).toHaveAccessibleName(/.+/);
+    await expect(page.locator('#lang-en-btn')).toHaveAccessibleName(/.+/);
+
+    await page.locator('#lang-en-btn').focus();
+    const outline = await page.locator('#lang-en-btn').evaluate((el) => getComputedStyle(el).outlineStyle);
+    expect(outline).not.toBe('none');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#lang-en-btn')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('no horizontal scroll at 768px and 1024px with every panel populated, in both languages', async ({ page }) => {
+    await addItem(page, 'priority', 'A reasonably long priority to check wrapping behaves');
+    await addItem(page, 'task', 'Another moderately long task description to check wrapping');
+    await addCommitment(page, 'A rather long commitment title to check panel wrapping behaves', '09:00');
+    await addGoal(page, 'A fairly long week goal to check that wrapping behaves nicely too');
+    await addDeadline(page, 'A fairly long deadline description to check that wrapping behaves nicely here too', '2026-12-01');
+
+    for (const lang of ['pt', 'en']) {
+      if (lang === 'en') await page.locator('#lang-en-btn').click();
+      for (const width of [768, 1024]) {
+        await page.setViewportSize({ width, height: 900 });
+        const fits = await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        );
+        expect(fits).toBe(true);
+      }
+    }
+  });
+
+  test('Priorities, Tasks and Commitments still precede Unfinished, Week and Upcoming in DOM order at 1280px', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const order = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('main .panel')).map((el) => el.className)
+    );
+    expect(order[0]).toContain('priorities-panel');
+    expect(order[1]).toContain('tasks-panel');
+    expect(order[2]).toContain('commitments-panel');
+    expect(order[3]).toContain('unfinished-panel');
+    expect(order[4]).toContain('week-panel');
+    expect(order[5]).toContain('upcoming-panel');
+  });
 });
