@@ -946,3 +946,71 @@ only `state.js`'s ordering logic did.
 Tasks panel with completed items sunk below the open ones) are captured by
 the new tests and published by the existing `browser-evidence-*` CI
 artifact.
+
+## 2026-09-20 — One accent, a self-hosted typeface, a real type scale (Issue #46)
+
+**Typeface: Source Sans 3, self-hosted, OFL 1.1.** Fetched the `400` and
+`700` latin-subset `woff2` files (Google Fonts build `v19`) and the `OFL.txt`
+licence text straight from the same sources Google Fonts itself serves them
+from (`fonts.gstatic.com`, `github.com/google/fonts`), and committed them
+under `fonts/` — `source-sans-3-latin-400.woff2` (15.3 KB),
+`source-sans-3-latin-700.woff2` (15.2 KB), total ≈30.6 KB, well inside the
+200 KB/two-file budget. Committed rather than linked so the app keeps
+working if the font host is down, per `GOAL.md`'s "must work without
+external services". `styles.css` declares both with a relative `src` and
+`font-display: swap`, and `--font-sans` keeps the previous system stack as
+the fallback in the same declaration (`"Source Sans 3", -apple-system,
+"Segoe UI", Roboto, system-ui, sans-serif`), so first paint never blocks on
+the font and a blocked/failed font request still renders a fully usable
+page — asserted by a Playwright test that aborts every `**/*.woff2` request
+and checks the heading, every panel heading and every add-form are still
+visible with no console error at 360px.
+
+**One accent: the six different `border-top` styles (`solid`/`dashed`/
+`dotted`/`double`, four different colours) on `.priorities-panel`,
+`.commitments-panel`, `.notes-panel`, `.unfinished-panel`, `.week-panel`
+and `.upcoming-panel` are gone.** Every panel now falls back to the shared
+`.panel, .notes-panel { border: 1px solid var(--border) }` rule; only
+`.priorities-panel` keeps a distinguishing `border-top: 4px solid
+var(--accent)`, because `GOAL.md`'s morning-opening question is "what
+matters most today?" and Priorities answers it. The matching
+`.commitments-list .item { border-left: 4px dashed var(--accent) }` accent
+and the `.week-day.is-today` dashed border are gone for the same reason —
+`dashed`/`dotted`/`double` no longer appear anywhere in `styles.css`,
+verified by a test that greps the file. `is-today` now differs from
+`is-selected` by border width and colour alone (both `solid`), which was
+already enough for `is-selected` to read as distinct.
+
+**Type scale: five tokens, not six unrelated sizes.** Added `--font-sans`,
+`--weight-regular`/`--weight-bold`, `--line-normal` and
+`--text-h1`/`--text-h2`/`--text-body`/`--text-meta` to `:root`, and pointed
+the date `h1`, panel `h2`s, `body` and `.panel-hint` at them so the
+hierarchy (`h1` 1.5–2.1rem clamp > `h2` 1.05rem > body 1rem > meta 0.8rem)
+comes from the token set instead of scattered literals. Deliberately did
+*not* add a `--line-tight` token for the headings: an earlier attempt at
+`line-height: 1.2` on `.panel-head h2` clipped `#priorities-heading`'s
+`scrollHeight` against its `clientHeight` in the large-day test at 360px —
+Source Sans 3 Bold's line-box metrics don't fit under a 1.2 line-height at
+this size the way the old system-ui stack happened to. Left headings on the
+inherited `--line-normal` (1.45) instead of chasing a smaller value; nothing
+in the Issue required a second line-height token.
+
+**Contrast: nothing needed re-tuning.** Computed WCAG ratios for the
+existing tokens: body text `#23211c` on the panel surface `#ffffff` ≈15.9:1,
+muted `#6f6a5e` on `#ffffff` ≈5.4:1, `--accent-text` `#8a3608` (the only
+colour used as text via `color:`, e.g. `.eyebrow`) on the page background
+`#f6f4ef` ≈7.3:1, and `--focus` `#1d4ed8` against both the panel surface
+(≈6.7:1) and the page background (≈6.1:1) — all already clear the 4.5:1
+text / 3:1 non-text minimums, so `--focus` and the palette are unchanged.
+Verified by an in-test WCAG contrast helper (relative luminance +
+contrast-ratio, no new dependency) in `tests/app.spec.js`.
+
+**Evidence.** `screenshots/desktop-1280.png` and `screenshots/mobile-360.png`
+(pt-BR, 1280px/360px) and `screenshots/en-us-desktop-1280.png` (en-US,
+1280px) already exist from earlier Issues and now show the new accent
+system and typeface; published by the existing `browser-evidence-*` CI
+artifact. No layout, copy, translation, storage or behavioural change —
+the diff is `styles.css`, `fonts/`, this file and new tests in
+`tests/app.spec.js`. `index.html` didn't need a change: the `@font-face`
+`src` is a relative path resolved from `styles.css` itself, so nothing in
+the `<head>` had to move.
