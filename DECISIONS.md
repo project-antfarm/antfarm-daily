@@ -726,3 +726,87 @@ en-us-desktop-1280.png` (already produced by existing tests, now against the
 new CSS) and a new `screenshots/pt-br-tablet-768.png` cover the widths and
 languages the Issue asks for; all are published by the existing
 `browser-evidence-*` CI artifact.
+
+## 2026-09-20 — A per-day notes area (Issue #40)
+
+**Notes live on the day record, normalised the same way `commitments` and
+`goals` already are.** `state.days[key].notes` is a plain string, defaulted
+to `''` by `getDay` (`day.notes ?? ''`) exactly like `getDay` already covers
+a `commitments`-less record from before #16 and `getWeek` covers a
+`goals`-less one from before #18. No `STORAGE_KEY` bump, no rewrite of
+existing days on load — a day stored before this Issue loads with an empty
+note and its existing items untouched, and stays byte-identical until acted
+on, the same rule #23 established for the rest of `state.days`.
+
+**Committed on a debounce, flushed early on blur and on `beforeunload`.** A
+save button is exactly the "forget to press it" failure mode the Issue
+warns against, and writing to `localStorage` on every keystroke is the
+opposite failure — a few hundred synchronous writes for one paragraph. A
+500ms debounce after the last keystroke covers the normal case (stop typing,
+the note is saved moments later); a `blur` listener flushes immediately
+so switching day, language or panel — anything that moves focus off the
+textarea — never race the debounce; a `beforeunload` flush covers the
+person reloading or closing the tab mid-debounce, which a Playwright test
+that fills the textarea and reloads without pausing would otherwise catch
+as data loss. None of the three call `render()`: the textarea already shows
+exactly what it's about to save, and nothing else on the page reads notes,
+so there is nothing else to redraw. `render()` itself still sets
+`notesInput.value = day.notes` on every call (day switch, language switch,
+any other action) — safe because a focused textarea always receives `blur`
+before a click on another control's handler runs, so the value it's about
+to be overwritten with is always the value it just committed.
+
+**The blur/unload flush is guarded by a `noteDirty` flag, not called
+unconditionally.** The first version called `setNote`+`save` from every
+`blur` and `beforeunload` regardless of whether the textarea had actually
+changed, and it broke four unrelated existing tests: each one seeds
+`localStorage` directly (a stale-record fixture, a midnight-rollover fixture)
+and then calls `page.reload()`, and a `beforeunload` firing on the page
+still open at that moment saved the in-memory `state` it had booted with —
+overwriting the fixture that had just been written underneath it, before the
+new page ever got to read it. `noteDirty` is set by the `input` listener and
+cleared once a commit actually runs, so blur/unload are no-ops unless the
+person typed something since the last commit — the exact same rule #23 gives
+every other read path: a day is never rewritten just by the app loading or
+navigating, only by an explicit edit.
+
+**Its own full-width row between Commitments and Unfinished, not a fourth
+tile inside `.panels`.** `.panels`' two-column grid (#16) and its desktop
+placement (#38) are sized and balanced for three fixed panels — the
+`commitments-panel { grid-column: 1 / -1 }` rule that lets it span the row
+already depends on being the last item in that grid. Dropping a notes tile
+into that grid would either force every panel's `grid-column` to be
+reconsidered or leave notes fighting Commitments for the spanning row. A
+plain `<section class="notes-panel">` as `main`'s next sibling after
+`.panels` avoids both: below `1024px` it just stacks (`margin-top: 20px`,
+the same spacing `.unfinished-panel` etc. use); at `1024px`+ it gets
+`grid-column: 1 / -1` like `.upcoming-panel`, its own full row, so
+Unfinished and Week keep the side-by-side arrangement #38 gave them instead
+of one of them getting shoved into a half-empty row. Deliberately **not**
+given the `.panel` class, even though it shares every `.panel` box style
+(added via `.panel, .notes-panel { ... }` instead of duplicating the
+declarations) — the Issue's own #38 order test does
+`document.querySelectorAll('main .panel')` and asserts fixed indices 0–5 for
+Priorities/Tasks/Commitments/Unfinished/Week/Upcoming; sharing that class
+would insert notes into that array and break the assertion the Issue
+requires to keep passing unmodified. A new, separate test covers the notes
+area's own position instead.
+
+**2000-character max, enforced by the textarea's own `maxlength` and mirrored
+in `setNote`.** The existing text inputs cap at 140 (a title, read at a
+glance); a note is prose someone might paste a paragraph into, so the cap
+needed to be an order of magnitude higher rather than a tweak — 2000 chars
+is roughly 300–350 words, comfortably past the Issue's ~1500-char test case
+while still reading as a day's context rather than a document. `setNote`
+also slices to `MAX_NOTE_LENGTH` so a value set outside the textarea (a
+direct `state.js` call, a future integration) can't silently exceed it.
+
+**Notes are excluded from `dayHasWork`, week progress and the Unfinished
+panel by construction, not by a special case.** All three already derive
+strictly from `LISTS = ['priorities', 'tasks', 'commitments']` (`dayHasWork`,
+`weekProgress`) or from `['priorities', 'tasks']` (`unfinishedBefore`); none
+of those arrays were touched, and `notes` was never added to them. A note
+has no `completed` state — there is nothing coherent for "planned work" or
+"unfinished" to mean for a paragraph of prose — so the right fix is that
+none of the three functions know the field exists, rather than adding an
+`if (list !== 'notes')` guard somewhere.

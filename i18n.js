@@ -37,6 +37,10 @@ const ptBR = {
   commitmentInputPlaceholder: 'Adicionar um compromisso…',
   commitmentMsg: 'Um compromisso precisa de um horário e uma descrição.',
 
+  notesHeading: 'Notas',
+  notesInputLabel: 'Notas do dia',
+  notesInputPlaceholder: 'Algum contexto sobre este dia…',
+
   add: 'Adicionar',
   itemDeleteLabel: 'Excluir "{text}"',
   itemDeleteConfirm: 'Excluir "{text}"? Esta ação não pode ser desfeita.',
@@ -117,6 +121,10 @@ const enUS = {
   commitmentInputLabel: 'Add a commitment',
   commitmentInputPlaceholder: 'Add a commitment…',
   commitmentMsg: 'A commitment needs a time and a description.',
+
+  notesHeading: 'Notes',
+  notesInputLabel: 'Notes for the day',
+  notesInputPlaceholder: 'Any context about this day…',
 
   add: 'Add',
   itemDeleteLabel: 'Delete "{text}"',

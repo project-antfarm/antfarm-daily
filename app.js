@@ -13,6 +13,7 @@ import {
   dayHasWork,
   getDay,
   getWeek,
+  setNote,
   addGoal,
   toggleGoal,
   removeGoal,
@@ -81,6 +82,7 @@ const inputs = {
   commitments: document.getElementById('commitment-input'),
 };
 const timeInput = document.getElementById('commitment-time-input');
+const notesInput = document.getElementById('notes-input');
 const limitMsg = document.getElementById('priority-limit-msg');
 const commitmentMsg = document.getElementById('commitment-msg');
 
@@ -482,6 +484,7 @@ function render() {
     emptyEls[list].hidden = items.length > 0;
     items.forEach((item, index) => listEls[list].appendChild(renderItem(key, list, item, index)));
   }
+  notesInput.value = day.notes;
 
   const atLimit = day.priorities.length >= MAX_PRIORITIES;
   limitMsg.hidden = !atLimit;
@@ -554,6 +557,37 @@ deadlineForm.addEventListener('submit', (event) => {
   render();
   deadlineInput.focus();
 });
+
+// Committed on a debounce (so typing never hits localStorage on every
+// keystroke) and flushed early on blur or page unload, so a pending edit
+// isn't lost to a stray reload or tab close before the debounce fires. Guarded
+// by `noteDirty` so blur/unload are no-ops when nothing was typed — without
+// it, every reload (including one that only just seeded localStorage for a
+// test) would re-save the in-memory `state` it booted with and clobber
+// whatever was written to storage after that boot, breaking the "a day isn't
+// rewritten just by navigating" rule from #23. No render() call: the
+// textarea already shows exactly what it's saving, and nothing else on the
+// page reads notes (see DECISIONS.md), so there's nothing to redraw.
+const NOTE_SAVE_DEBOUNCE_MS = 500;
+let noteSaveTimer = null;
+let noteDirty = false;
+
+function commitNote() {
+  clearTimeout(noteSaveTimer);
+  noteSaveTimer = null;
+  if (!noteDirty) return;
+  noteDirty = false;
+  state = setNote(state, activeDay(), notesInput.value);
+  save(state);
+}
+
+notesInput.addEventListener('input', () => {
+  noteDirty = true;
+  clearTimeout(noteSaveTimer);
+  noteSaveTimer = setTimeout(commitNote, NOTE_SAVE_DEBOUNCE_MS);
+});
+notesInput.addEventListener('blur', commitNote);
+window.addEventListener('beforeunload', commitNote);
 
 prevBtn.addEventListener('click', () => selectDay(addDays(activeDay(), -1)));
 nextBtn.addEventListener('click', () => selectDay(addDays(activeDay(), 1)));
