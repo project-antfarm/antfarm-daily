@@ -583,3 +583,74 @@ the second language, the control, and the persistence; shipping a
 half-translated interface or an unused switcher before that Issue lands
 would leave `main` in a state nothing could verify as "nothing a user sees
 changed."
+
+## 2026-09-20 — English catalogue and the header language switcher (Issue #36, closes #33)
+
+**The language preference lives in its own `localStorage` key
+(`antfarm.daily.lang`), never in the `antfarm.daily.v1` planning payload.**
+It's a UI setting, not planning data: it has no place in `days`/`weeks`/
+`deadlines`, and keeping it out means `load()`/`save()`, `version` and the
+whole upgrade-path story in `state.js` stay untouched by this Issue — no
+migration to write for a single string. Pinned by a test that switches
+language twice and asserts the `antfarm.daily.v1` value is byte-identical
+before and after.
+
+**`i18n.js` now owns the active language as module state (`activeLang`),
+read and written through `getLang()`/`setLang()`, with `t()` resolving
+against `catalogues[activeLang]` at call time rather than a catalogue
+captured at import.** This is what makes a runtime switch propagate: every
+`t()` call anywhere in the app — including the ones inside `state.js`'s
+`deadlineLabel`/`approachingSummary` — automatically reads the new language
+on its very next call, with nothing in either module needing to know a
+switch happened. `setLang()` persists to `localStorage` itself (mirroring how
+`state.js` owns its own storage key) so `app.js` doesn't need a second
+persistence path for a value `i18n.js` already owns. An absent or
+unrecognised stored value falls back to `'pt-BR'`; `navigator.language` is
+never read, matching `GOAL.md`'s explicit pt-BR-by-default requirement.
+
+**`LOCALE` (a const export) is replaced by `getLang()` (a function).**
+Language identifiers double as `Intl` locale tags — `'pt-BR'` and `'en-US'`
+are both the catalogue key and the exact string every `toLocaleDateString`
+call site already needs — so no separate locale-mapping table exists
+alongside the catalogue map. All five call sites in `app.js` swap
+`LOCALE` for `getLang()` unchanged otherwise.
+
+**A change propagates as re-apply + re-render, not a reload.** `app.js`'s
+`switchLang()` calls `setLang()`, sets `document.documentElement.lang`,
+re-runs the existing `applyStaticText()` (unchanged — it already walks the
+DOM fresh on every call, it just now runs more than once), updates the
+switcher's own `aria-pressed` state, and calls the existing `render()`. No
+new rendering path was written; the two functions #34 already had for boot
+turned out to be exactly what a runtime switch needs, called again.
+
+**The switcher is two `aria-pressed` toggle buttons (`#lang-pt-btn`,
+`#lang-en-btn`) in a `role="group"`, the same toggle-button pattern
+`item-toggle` already uses elsewhere** — reusing it rather than introducing
+a radio group or a new visual language. Their labels (`PT`/`EN`) and
+`aria-label`s (`Português`/`English`) are fixed language autonyms, not
+catalogue entries: a language's own name is conventionally left untranslated
+in a language switcher (a Portuguese speaker still recognizes "English",
+and vice versa), and keeping them out of `catalogues` means the per-language
+leftover-word guard test never has to special-case them. The group's own
+`aria-label` ("Idioma"/"Language") *is* a catalogue entry, since it describes
+the control's purpose rather than naming a language. The active option is
+marked with `aria-pressed="true"` plus a heavier accent border — never color
+alone.
+
+**The pt-BR-vs-English leftover-word guard from #28 is now two tests, not
+one.** #28's original (`a fully populated pt-BR day shows none of the
+interface's former English words`) keeps its word list and gains a mirror
+in the new `English interface via the language switcher` describe block,
+checking a curated list of distinctive pt-BR words against the EN-mode
+render. Both now go through a shared `assertNoLeftoverWords()` helper that
+also scans every `aria-label` and `placeholder`, not just
+`body.innerText` — attributes are exactly where a half-applied
+`data-i18n-aria-label` would hide a leftover, and the original test would
+have missed one.
+
+**Wording note:** a few pt-BR strings (e.g. `unfinishedHeading: 'Pendências'`)
+read slightly differently in register than their English counterpart
+(`'Unfinished'`) would in a literal back-translation. Left as-is — wording
+changes to existing pt-BR strings are explicitly out of scope for this
+Issue, and the two catalogues were written to read naturally in their own
+language rather than to mirror each other's phrasing.

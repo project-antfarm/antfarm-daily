@@ -26,12 +26,13 @@ import {
   moveItem,
   MAX_PRIORITIES,
 } from './state.js';
-import { t, LOCALE } from './i18n.js';
+import { t, getLang, setLang } from './i18n.js';
 
 // Fills every markup element that carries a data-i18n* attribute from the
-// catalogue, once at boot. Elements whose text changes on every render (the
-// eyebrow, the date heading, panel summaries...) are set directly by render()
-// instead and carry no data-i18n attribute.
+// active catalogue. Called at boot and again on every language switch.
+// Elements whose text changes on every render (the eyebrow, the date
+// heading, panel summaries...) are set directly by render() instead and
+// carry no data-i18n attribute.
 function applyStaticText() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n);
@@ -43,7 +44,15 @@ function applyStaticText() {
     el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
   });
 }
-applyStaticText();
+
+const langPtBtn = document.getElementById('lang-pt-btn');
+const langEnBtn = document.getElementById('lang-en-btn');
+
+function updateLangSwitch() {
+  const lang = getLang();
+  langPtBtn.setAttribute('aria-pressed', String(lang === 'pt-BR'));
+  langEnBtn.setAttribute('aria-pressed', String(lang === 'en-US'));
+}
 
 const eyebrow = document.getElementById('day-eyebrow');
 const dateHeading = document.getElementById('today-date');
@@ -118,7 +127,7 @@ function selectDay(dayKey) {
 }
 
 function formatDate(key) {
-  return parseKey(key).toLocaleDateString(LOCALE, {
+  return parseKey(key).toLocaleDateString(getLang(), {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -127,7 +136,7 @@ function formatDate(key) {
 }
 
 function formatDueDate(key) {
-  return parseKey(key).toLocaleDateString(LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return parseKey(key).toLocaleDateString(getLang(), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function renderItem(key, list, item, index) {
@@ -309,7 +318,7 @@ function renderDeadline(item, today) {
 // is scoped to the selected day.
 function originLabel(originKey, selectedKey) {
   if (originKey === addDays(selectedKey, -1)) return t('unfinishedOrigin');
-  return parseKey(originKey).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' });
+  return parseKey(originKey).toLocaleDateString(getLang(), { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function unfinishedSummaryText(count) {
@@ -436,7 +445,7 @@ function renderWeekStrip(key) {
     const letter = document.createElement('span');
     letter.className = 'week-day-label';
     letter.setAttribute('aria-hidden', 'true');
-    letter.textContent = date.toLocaleDateString(LOCALE, { weekday: 'short' });
+    letter.textContent = date.toLocaleDateString(getLang(), { weekday: 'short' });
 
     const num = document.createElement('span');
     num.className = 'week-day-num';
@@ -447,7 +456,7 @@ function renderWeekStrip(key) {
     dot.className = 'week-day-dot';
     dot.setAttribute('aria-hidden', 'true');
 
-    let label = date.toLocaleDateString(LOCALE, { weekday: 'long', month: 'long', day: 'numeric' });
+    let label = date.toLocaleDateString(getLang(), { weekday: 'long', month: 'long', day: 'numeric' });
     if (isToday) label += t('weekDayToday');
     if (hasWork) label += t('weekDayHasWork');
     btn.setAttribute('aria-label', label);
@@ -550,4 +559,21 @@ prevBtn.addEventListener('click', () => selectDay(addDays(activeDay(), -1)));
 nextBtn.addEventListener('click', () => selectDay(addDays(activeDay(), 1)));
 todayBtn.addEventListener('click', () => selectDay(todayKey()));
 
+// Switching language re-applies static markup and re-renders in place —
+// no page reload — so `documentElement.lang`, the title, every data-i18n
+// element and everything render() writes all move together.
+function switchLang(lang) {
+  if (lang === getLang()) return;
+  setLang(lang);
+  document.documentElement.lang = getLang();
+  applyStaticText();
+  updateLangSwitch();
+  render();
+}
+langPtBtn.addEventListener('click', () => switchLang('pt-BR'));
+langEnBtn.addEventListener('click', () => switchLang('en-US'));
+
+document.documentElement.lang = getLang();
+applyStaticText();
+updateLangSwitch();
 render();
