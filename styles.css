@@ -127,9 +127,31 @@ body {
   background: var(--bg);
 }
 
+.week-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
 .week-strip {
   display: flex;
   gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.day-jump {
+  margin-top: 8px;
+}
+
+.day-jump-input {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
 }
 
 .week-day {
@@ -627,7 +649,8 @@ body {
     grid-template-areas:
       'top switch'
       'heading heading'
-      'week week';
+      'week week'
+      'jump jump';
     align-items: center;
     column-gap: 16px;
   }
@@ -645,8 +668,13 @@ body {
     grid-area: heading;
   }
 
-  .week-strip {
+  .week-nav {
     grid-area: week;
+  }
+
+  .day-jump {
+    grid-area: jump;
+    margin-top: 0;
   }
 
   main {

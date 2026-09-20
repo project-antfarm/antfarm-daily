@@ -25,6 +25,7 @@ import {
   approachingSummary,
   unfinishedBefore,
   moveItem,
+  isValidDateKey,
   MAX_PRIORITIES,
 } from './state.js';
 import { t, getLang, setLang } from './i18n.js';
@@ -61,6 +62,9 @@ const weekStripEl = document.getElementById('week-strip');
 const prevBtn = document.getElementById('prev-day');
 const nextBtn = document.getElementById('next-day');
 const todayBtn = document.getElementById('today-btn');
+const prevWeekBtn = document.getElementById('prev-week');
+const nextWeekBtn = document.getElementById('next-week');
+const jumpDateInput = document.getElementById('jump-date-input');
 const listEls = {
   priorities: document.getElementById('priorities-list'),
   tasks: document.getElementById('tasks-list'),
@@ -475,6 +479,7 @@ function render() {
 
   eyebrow.textContent = isToday ? t('dayToday') : t('dayViewing');
   dateHeading.textContent = formatDate(key);
+  jumpDateInput.value = key;
 
   const day = getDay(state, key);
 
@@ -592,6 +597,20 @@ window.addEventListener('beforeunload', commitNote);
 prevBtn.addEventListener('click', () => selectDay(addDays(activeDay(), -1)));
 nextBtn.addEventListener('click', () => selectDay(addDays(activeDay(), 1)));
 todayBtn.addEventListener('click', () => selectDay(todayKey()));
+prevWeekBtn.addEventListener('click', () => selectDay(addDays(activeDay(), -7)));
+nextWeekBtn.addEventListener('click', () => selectDay(addDays(activeDay(), 7)));
+
+// A cleared or unparseable value is a no-op, never a jump to an empty date —
+// resetting the field back to the day actually being viewed is what keeps it
+// reading as "where am I" per the Issue's own requirement.
+jumpDateInput.addEventListener('change', () => {
+  const value = jumpDateInput.value;
+  if (!value || !isValidDateKey(value)) {
+    jumpDateInput.value = activeDay();
+    return;
+  }
+  selectDay(value);
+});
 
 // Switching language re-applies static markup and re-renders in place —
 // no page reload — so `documentElement.lang`, the title, every data-i18n

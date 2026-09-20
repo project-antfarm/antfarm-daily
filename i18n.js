@@ -15,6 +15,9 @@ const ptBR = {
   weekStrip: 'Semana',
   weekDayToday: ', hoje',
   weekDayHasWork: ', com trabalho planejado',
+  prevWeek: 'Semana anterior',
+  nextWeek: 'Próxima semana',
+  jumpDateLabel: 'Ir para uma data',
 
   langSwitchLabel: 'Idioma',
 
@@ -100,6 +103,9 @@ const enUS = {
   weekStrip: 'Week',
   weekDayToday: ', today',
   weekDayHasWork: ', has planned work',
+  prevWeek: 'Previous week',
+  nextWeek: 'Next week',
+  jumpDateLabel: 'Jump to a date',
 
   langSwitchLabel: 'Language',
 
