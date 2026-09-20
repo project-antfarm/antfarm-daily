@@ -169,16 +169,16 @@ body {
 
 .day-jump {
   margin-top: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.day-jump-input {
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
+.day-jump-label {
+  font-size: var(--text-meta);
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .week-day {
@@ -225,6 +225,7 @@ body {
 }
 
 .week-day.is-today {
+  border-width: 2px;
   border-color: var(--accent-text);
 }
 
@@ -237,6 +238,10 @@ body {
 
 .week-day.is-selected .week-day-num {
   font-weight: 800;
+}
+
+.week-day.is-today.is-selected {
+  border-width: 3px;
 }
 
 .panels {
@@ -426,15 +431,20 @@ body {
   flex-wrap: wrap;
 }
 
-.add-form input {
-  flex: 1 1 160px;
-  min-width: 160px;
-  padding: 10px 12px;
+.add-form input,
+.day-jump-input {
+  height: 44px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font: inherit;
   color: var(--text);
   background: var(--surface);
+}
+
+.add-form input {
+  flex: 1 1 160px;
+  min-width: 160px;
 }
 
 .commitment-form-fields {
