@@ -11,8 +11,8 @@ on:
 permissions: {}
 jobs:
   oracle:
-    uses: project-antfarm/antfarm-core/.github/workflows/oracle.yml@7bf240a922b3ec9b0265e3569d06bf3e48e8a381
+    uses: project-antfarm/antfarm-core/.github/workflows/oracle.yml@1ea1b412151d540db706a47b0db5fd42445e662c
     with:
-      core_ref: 7bf240a922b3ec9b0265e3569d06bf3e48e8a381
+      core_ref: 1ea1b412151d540db706a47b0db5fd42445e662c
       issue: ${{ github.event.inputs.issue || '' }}
     secrets: inherit

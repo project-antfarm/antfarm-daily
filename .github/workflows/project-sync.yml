@@ -8,7 +8,7 @@ on:
 permissions: {}
 jobs:
   sync:
-    uses: project-antfarm/antfarm-core/.github/workflows/project-sync.yml@7bf240a922b3ec9b0265e3569d06bf3e48e8a381
+    uses: project-antfarm/antfarm-core/.github/workflows/project-sync.yml@1ea1b412151d540db706a47b0db5fd42445e662c
     with:
       project_number: "1"
     secrets: inherit

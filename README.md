@@ -47,7 +47,7 @@ Issue lifecycle (transitions applied by workflows, not by prompts):
 
 ```
 ready → in-progress → PR open → needs-fix | approved → merged
-needs-fix with attempt:2 → blocked   (Oracle advises, Queen decomposes or drops)
+needs-fix with attempt:2 → blocked → Oracle advises → oracle-advised wakes the Queen, who decomposes or drops
 in-progress without PR past the lease → back to ready
 done → Oracle audits → done stays (colony paused, human judges) | done-rejected (Queen continues)
 ```
