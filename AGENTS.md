@@ -57,3 +57,12 @@ not mandatory: use one when it helps the task in front of you.
 - Add or update tests for the acceptance criteria.
 - Run lint and tests locally before opening the PR.
 - Answer review feedback on the same PR. Do not open a second one.
+
+## Oracle
+
+- Runs only when an Issue is labelled `done` or `blocked`. Never plans,
+  builds, merges or labels.
+- Audits a DONE claim item by item against `GOAL.md`, opening every piece of
+  evidence. Its verdict is applied by the infrastructure: a rejected claim is
+  closed with the findings and labelled `done-rejected`.
+- On a blocked Issue it leaves a recommendation. The Queen decides.

@@ -1,162 +1,24 @@
 name: queen
+# Thin caller. Triggers live here; the job lives in antfarm-core, pinned by SHA.
+# The same SHA goes in `uses:` and in `core_ref` (GitHub does not expose the
+# called workflow's own commit, and the manifest must record it).
 on:
   # Primary trigger: a colony PR finished CI, so there is something to review.
   workflow_run:
     workflows: [ci]
     types: [completed]
-  # A blocked Issue needs a decision now, not at the next heartbeat.
+  # A blocked Issue or a rejected DONE claim needs a decision now.
   issues:
     types: [labeled]
   # Heartbeat every 3 hours, off the top of the hour where GitHub delays cron
-  # the most. It recovers the colony after a guard block or a missed event; the
-  # guard step ends it for free when a Worker is busy and nothing awaits review.
+  # the most. It recovers the colony after a guard block or a missed event.
   schedule:
     - cron: "17 */3 * * *"
   workflow_dispatch:
 permissions: {}
-env:
-  ROLE: queen
-  APP: antfarm-queen
-  STATUS_ISSUE: "1"
-  GH_REPO: ${{ github.repository }}
-  SPECIMEN: ${{ github.event.repository.name }}
 jobs:
   queen:
-    if: >-
-      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && startsWith(github.event.workflow_run.head_branch, 'ant/'))
-      || (github.event_name == 'issues' && github.event.label.name == 'blocked')
-    runs-on: ubuntu-latest
-    # Job level on purpose: see ant.yml.
-    concurrency:
-      group: queen
-      cancel-in-progress: false
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: read config
-        id: cfg
-        run: |
-          for k in run telemetry_repo queen.model queen.max_turns queen.runs_per_day queen.review_wait_max_seconds budget.weekly_cost_usd ready_max attempts_max lease_hours; do
-            echo "${k//./_}=$(yq ".$k" .antfarm/config.yml)" >> "$GITHUB_OUTPUT"
-          done
-          echo "started_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
-      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
-        id: app
-        with:
-          app-id: ${{ secrets.QUEEN_APP_ID }}
-          private-key: ${{ secrets.QUEEN_APP_PRIVATE_KEY }}
-      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
-        id: tel
-        with:
-          app-id: ${{ secrets.TELEMETRY_APP_ID }}
-          private-key: ${{ secrets.TELEMETRY_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: antfarm-telemetry
-      - name: guards
-        id: guard
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          ENABLED: ${{ vars.ANTFARM_ENABLED }}
-          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
-          LEASE_HOURS: ${{ steps.cfg.outputs.lease_hours }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          # block <reason> [log]: skip the model; "log" also records a guard.blocked event
-          block() { echo "blocked: $1"; { echo "skip=true"; echo "reason=$1"; echo "log=${2:-}"; } >> "$GITHUB_OUTPUT"; exit 0; }
-          [ "$ENABLED" = "true" ] || block kill_switch
-          [ "$(gh issue list --label done --state all --json number --jq length)" = "0" ] || block done
-          bash .antfarm/budget.sh queen || { rc=$?; [ "$rc" = 3 ] || exit "$rc"; block "$(grep -oP 'block_reason=\K.*' "$GITHUB_OUTPUT" | tail -1)" log; }
-          # lease: in-progress Issues without an open PR past the lease go back to ready
-          for n in $(gh issue list --label in-progress --json number --jq '.[].number'); do
-            [ "$(gh pr list --head "ant/issue-$n" --state open --json number --jq length)" = "0" ] || continue
-            since=$(gh api "repos/$GH_REPO/issues/$n/events" --jq '[.[] | select(.event=="labeled" and .label.name=="in-progress")] | last | .created_at')
-            age=$(( ( $(date -u +%s) - $(date -u -d "$since" +%s) ) / 3600 ))
-            if [ "$age" -ge "$LEASE_HOURS" ]; then
-              gh issue edit "$n" --remove-label in-progress --add-label ready
-              gh issue comment "$n" --body "Lease expired after ${age}h without a PR. Back to ready."
-            fi
-          done
-          # Heartbeat only: when a Worker is busy and nothing awaits review or
-          # rescue, there is nothing for the Queen to decide. End without a model.
-          if [ "$EVENT" = "schedule" ]; then
-            flight=$(gh issue list --state open --limit 200 --json labels --jq '[.[] | select([.labels[].name] | any(. == "ready" or . == "in-progress" or . == "needs-fix"))] | length')
-            prs=$(gh pr list --state open --limit 200 --json headRefName --jq '[.[] | select(.headRefName | startswith("ant/"))] | length')
-            stuck=$(gh issue list --state open --label blocked --json number --jq length)
-            if [ "$flight" != 0 ] && [ "$prs" = 0 ] && [ "$stuck" = 0 ]; then block worker_busy; fi
-          fi
-      - name: wait for the external review of this commit
-        if: steps.guard.outputs.skip != 'true' && github.event_name == 'workflow_run'
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          BRANCH: ${{ github.event.workflow_run.head_branch }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
-          SINCE: ${{ github.event.workflow_run.run_started_at }}
-          MAX: ${{ steps.cfg.outputs.queen_review_wait_max_seconds }}
-        run: |
-          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
-          [ -n "$pr" ] || { echo "no open PR for $BRANCH"; exit 0; }
-          end=$(( $(date +%s) + MAX ))
-          while [ "$(date +%s)" -lt "$end" ]; do
-            reviews=$(gh api "repos/$GH_REPO/pulls/$pr/reviews" --jq "[.[] | select(.user.login | startswith(\"chatgpt-codex-connector\")) | select(.commit_id == \"$SHA\")] | length")
-            thumbs=$(gh api "repos/$GH_REPO/issues/$pr/reactions" --jq "[.[] | select(.user.login | startswith(\"chatgpt-codex-connector\")) | select(.content == \"+1\" and .created_at >= \"$SINCE\")] | length")
-            if [ "$reviews" != 0 ] || [ "$thumbs" != 0 ]; then echo "external review present (reviews=$reviews thumbs=$thumbs)"; exit 0; fi
-            sleep 20
-          done
-          echo "no external review within ${MAX}s; proceeding without it"
-      - name: record guard block
-        if: steps.guard.outputs.log == 'log'
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          TELEMETRY_TOKEN: ${{ steps.tel.outputs.token }}
-          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
-          RUN: ${{ steps.cfg.outputs.run }}
-          MODEL: ${{ steps.cfg.outputs.queen_model }}
-          REASON: ${{ steps.guard.outputs.reason }}
-        run: bash .antfarm/telemetry.sh blocked "$(jq -cn --arg r "$REASON" '{reason:$r}')"
-      - uses: anthropics/claude-code-action@3b8197d3d486006dd4af54613517f21ac6ac625e # v1, pinned
-        if: steps.guard.outputs.skip != 'true'
-        id: claude
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ steps.app.outputs.token }}
-          # a run woken by the Worker's CI is attributed to the Worker's bot
-          allowed_bots: "antfarm-worker[bot],antfarm-worker"
-          bot_id: "330098065"
-          bot_name: "antfarm-queen[bot]"
-          prompt: |
-            Follow `.antfarm/queen.md` exactly. Repository: ${{ github.repository }}.
-            Deployed site: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-            Limits set by the infrastructure (you cannot change them):
-            - ready_max: ${{ steps.cfg.outputs.ready_max }} (work in flight: open Issues labelled ready, in-progress or needs-fix, plus open PRs; enforced by the infrastructure, which parks any Issue labelled ready beyond it)
-            - attempts_max: ${{ steps.cfg.outputs.attempts_max }} fix attempts per Issue before it is blocked
-            - Queen runs today: ${{ steps.guard.outputs.runs_today }} of ${{ steps.cfg.outputs.queen_runs_per_day }} before this one
-            - Colony budget this week: ${{ steps.guard.outputs.cost_week }} of ${{ steps.cfg.outputs.budget_weekly_cost_usd }} (conservative US$ estimate; when it runs out every agent stops until Sunday 16:00 UTC)
-          claude_args: |
-            --model ${{ steps.cfg.outputs.queen_model }}
-            --max-turns ${{ steps.cfg.outputs.queen_max_turns }}
-            --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebFetch"
-            --disallowedTools "Bash(sudo:*),Bash(ssh:*),Bash(scp:*)"
-            --json-schema '{"type":"object","properties":{"actions":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["actions","summary"]}'
-      - name: keep raw trace
-        if: always() && steps.claude.outputs.execution_file != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: trace-queen-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.claude.outputs.execution_file }}
-          retention-days: 90
-      - name: record execution
-        if: always() && steps.guard.outcome == 'success' && steps.guard.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          TELEMETRY_TOKEN: ${{ steps.tel.outputs.token }}
-          TELEMETRY_REPO: ${{ steps.cfg.outputs.telemetry_repo }}
-          RUN: ${{ steps.cfg.outputs.run }}
-          MODEL: ${{ steps.cfg.outputs.queen_model }}
-          STARTED_AT: ${{ steps.cfg.outputs.started_at }}
-          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
-          REPORT: ${{ steps.claude.outputs.structured_output || '{}' }}
-          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
-        run: |
-          kind=failed; [ "$CONCLUSION" = success ] && kind=completed
-          bash .antfarm/telemetry.sh "$kind" "$(jq -cn --argjson r "$REPORT" '{agent_report:$r}')"
+    uses: project-antfarm/antfarm-core/.github/workflows/queen.yml@1ea1b412151d540db706a47b0db5fd42445e662c
+    with:
+      core_ref: 1ea1b412151d540db706a47b0db5fd42445e662c
+    secrets: inherit
