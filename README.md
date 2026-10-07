@@ -33,6 +33,7 @@ Workflows, rulesets and config own the limits. A prompt is not a boundary.
 |--------|----------------------------------------------------------------------|----------------------------------------------------|
 | Queen  | reads GOAL.md, DECISIONS.md, Issues, PRs, CI; reviews, merges, plans | edits boundary files; changes limits; waits for humans when a decision is within its authority |
 | Worker | implements exactly one `ready` Issue, tests, opens a PR              | invents roadmap; touches other Issues              |
+| Oracle | audits a `done` claim item by item; advises on a `blocked` Issue     | plans, builds, merges, labels                      |
 | CI     | lint, tests, required checks                                         |                                                    |
 | Human  | emergency stop, boundary changes, final judgement                    | writes the backlog                                 |
 
@@ -46,8 +47,9 @@ Issue lifecycle (transitions applied by workflows, not by prompts):
 
 ```
 ready → in-progress → PR open → needs-fix | approved → merged
-needs-fix with attempt:2 → blocked   (Queen must decompose or drop)
+needs-fix with attempt:2 → blocked   (Oracle advises, Queen decomposes or drops)
 in-progress without PR past the lease → back to ready
+done → Oracle audits → done stays (colony paused, human judges) | done-rejected (Queen continues)
 ```
 
 `human` label: the Queen asks for a boundary change and keeps working on
@@ -66,9 +68,10 @@ the human.
   [`antfarm-telemetry`](https://github.com/project-antfarm/antfarm-telemetry),
   written by workflow steps through a dedicated App. Agents hold no credential
   for that repository. Raw traces are kept as workflow artifacts for 90 days.
-- **State** is never stored for decisions. Before any model starts,
-  `.antfarm/budget.sh` recomputes the counters from the event files and the
-  guard allows or blocks the run. Blocks are recorded as `guard.blocked`.
+- **State** is never stored for decisions. Before any model starts, the
+  guard in [`antfarm-core`](https://github.com/project-antfarm/antfarm-core)
+  recomputes the counters from the event files and allows or blocks the run.
+  Blocks are recorded as `guard.blocked`.
 
 Limits: runs per day per role, weekly token budget across the colony, turns
 per run, job timeout, concurrent `ready` Issues, attempts per Issue, lease per
@@ -89,6 +92,14 @@ Runs are summarised by the human in `RUNS.md`.
 
 ## Reuse
 
-To run another specimen: copy `.github/`, `.antfarm/`, `AGENTS.md`,
-`CLAUDE.md`, this README; write a new `GOAL.md`. Nothing here should know
-what the product is.
+The infrastructure lives in
+[`antfarm-core`](https://github.com/project-antfarm/antfarm-core): the
+reusable workflows, guards, telemetry writer and role prompts. This
+repository keeps only what is specific to it: `GOAL.md`, `.antfarm/config.yml`,
+`.antfarm/toolkit.yml`, the boundary files, and thin workflows that call the
+core at a pinned commit (`core_sha` in the run manifest). Since run-003.
+Runs 000 to 002 ran the same infrastructure from this repository's own
+`.github/` and `.antfarm/`, see tag `run-001` and the history before run-003.
+
+To run another specimen: `bootstrap.sh <owner>/<repo>` in `antfarm-core`,
+then write `GOAL.md`. Nothing in the core knows what the product is.

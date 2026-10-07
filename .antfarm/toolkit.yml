@@ -13,7 +13,7 @@ tools:
     version: v0.49.0
     sha256: 7278231dfd7e6a730a4ab7f847b195bcf02289c2d57622b0dab75a6411100c8f
     install: release binary, verified in the workflow; hook rewrites Bash commands
-    config: .antfarm/toolkit/rtk-config.toml
+    config: antfarm/toolkit/rtk-config.toml in antfarm-core
     notes: >
       Worker only. The Queen reviews from `gh` output, and on 2026-09-17 rtk
       was verified to truncate 110 of 492 added lines in `gh pr diff`. For the
@@ -29,9 +29,10 @@ tools:
     commit: e3ba2aa6f1e6f0bc4d69eb09c9f0d0a93af56156
     license: MIT
     install: >
-      .antfarm/toolkit/ponytail.md is the exact text the plugin's SessionStart
+      antfarm/toolkit/ponytail.md in antfarm-core is the exact text the plugin's SessionStart
       hook injects at level "full", generated from the pinned commit with the
-      plugin's own builder. Loaded for every agent through CLAUDE.md.
+      plugin's own builder. Appended to the system prompt of every agent by
+      the antfarm-core workflows (--append-system-prompt-file).
 
   - name: minimalist-ui
     layer: specimen
@@ -54,4 +55,5 @@ tools:
       screenshots/ as artifacts.
 
 runtime:
-  claude-code-action: 3b8197d3d486006dd4af54613517f21ac6ac625e # v1 on 2026-09-17; also fixes the Claude Code version
+  claude-code-action: 58985842b834ed26087302ba27d07bc24ca8697a # v1 on 2026-10-06; installs Claude Code 2.1.292 (Opus 5.5 needs 2.1.280, Sonnet 5.5 needs 2.1.284)
+  antfarm-core: see core_sha in the run manifest; pinned in .github/workflows/*.yml
